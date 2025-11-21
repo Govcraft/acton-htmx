@@ -11,7 +11,7 @@ pub mod templates;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{DbCommand, DevCommand, NewCommand};
+use commands::{DbCommand, DevCommand, NewCommand, ScaffoldCommand};
 
 // Re-export for library usage
 pub use templates::ProjectTemplate;
@@ -38,6 +38,23 @@ enum Commands {
     Db {
         #[command(subcommand)]
         command: DbCommands,
+    },
+    /// Generate CRUD scaffold
+    Scaffold {
+        #[command(subcommand)]
+        command: ScaffoldCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ScaffoldCommands {
+    /// Generate complete CRUD resource
+    Crud {
+        /// Model name (PascalCase, e.g., Post, UserProfile)
+        model: String,
+        /// Field definitions (e.g., title:string, author:references:User)
+        #[arg(required = true)]
+        fields: Vec<String>,
     },
 }
 
@@ -72,6 +89,14 @@ fn main() -> Result<()> {
                 DbCommands::Create { name } => DbCommand::Create { name },
             };
             db_cmd.execute()?;
+        }
+        Commands::Scaffold { command } => {
+            match command {
+                ScaffoldCommands::Crud { model, fields } => {
+                    let cmd = ScaffoldCommand::new(model, fields);
+                    cmd.execute()?;
+                }
+            }
         }
     }
 

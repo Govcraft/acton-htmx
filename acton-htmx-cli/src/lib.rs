@@ -6,6 +6,8 @@
 #![allow(clippy::cognitive_complexity)]
 #![allow(clippy::multiple_crate_versions)]
 
+pub mod scaffold;
 pub mod templates;
 
+pub use scaffold::{FieldDefinition, FieldType, ScaffoldGenerator, TemplateHelpers};
 pub use templates::ProjectTemplate;
