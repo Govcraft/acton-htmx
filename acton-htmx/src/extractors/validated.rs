@@ -158,16 +158,16 @@ impl IntoResponse for ValidationError {
 /// let errors = ValidationErrors::new();
 /// let formatted = format_validation_errors(&errors);
 /// ```
+#[must_use]
 pub fn format_validation_errors(errors: &validator::ValidationErrors) -> String {
     let mut messages = Vec::new();
 
     for (field, field_errors) in errors.field_errors() {
         for error in field_errors {
-            let message = if let Some(msg) = &error.message {
-                msg.to_string()
-            } else {
-                format!("{}: {}", field, error.code)
-            };
+            let message = error.message.as_ref().map_or_else(
+                || format!("{field}: {}", error.code),
+                ToString::to_string,
+            );
             messages.push(message);
         }
     }
@@ -214,11 +214,10 @@ pub fn validation_errors_json(errors: &validator::ValidationErrors) -> serde_jso
         let messages: Vec<String> = field_errors
             .iter()
             .map(|error| {
-                if let Some(msg) = &error.message {
-                    msg.to_string()
-                } else {
-                    error.code.to_string()
-                }
+                error.message.as_ref().map_or_else(
+                    || error.code.to_string(),
+                    ToString::to_string,
+                )
             })
             .collect();
 

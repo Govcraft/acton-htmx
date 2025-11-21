@@ -15,6 +15,10 @@ readme = "../README.md"
 [lints]
 workspace = true
 
+[lib]
+name = "acton_htmx"
+path = "src/lib.rs"
+
 [[bin]]
 name = "acton-htmx"
 path = "src/main.rs"
@@ -34,3 +38,6 @@ handlebars = "6"
 
 # File operations
 walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

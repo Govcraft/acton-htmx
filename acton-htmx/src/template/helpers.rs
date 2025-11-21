@@ -258,21 +258,20 @@ impl From<&str> for SafeString {
 /// ```
 #[must_use]
 pub fn validation_errors_for(errors: &validator::ValidationErrors, field: &str) -> String {
-    if let Some(field_errors) = errors.field_errors().get(field) {
+    use std::fmt::Write;
+
+    errors.field_errors().get(field).map_or_else(String::new, |field_errors| {
         let mut html = String::from(r#"<div class="field-errors">"#);
         for error in *field_errors {
-            let message = if let Some(msg) = &error.message {
-                msg.to_string()
-            } else {
-                format!("{}: {}", field, error.code)
-            };
-            html.push_str(&format!(r#"<span class="error">{message}</span>"#));
+            let message = error.message.as_ref().map_or_else(
+                || format!("{field}: {}", error.code),
+                ToString::to_string,
+            );
+            let _ = write!(html, r#"<span class="error">{message}</span>"#);
         }
         html.push_str("</div>");
         html
-    } else {
-        String::new()
-    }
+    })
 }
 
 /// Check if a field has validation errors
@@ -335,6 +334,8 @@ pub fn error_class(errors: &validator::ValidationErrors, field: &str) -> &'stati
 /// ```
 #[must_use]
 pub fn validation_errors_list(errors: &validator::ValidationErrors) -> String {
+    use std::fmt::Write;
+
     if errors.is_empty() {
         return String::new();
     }
@@ -342,12 +343,11 @@ pub fn validation_errors_list(errors: &validator::ValidationErrors) -> String {
     let mut html = String::from(r#"<div class="validation-errors"><ul>"#);
     for (field, field_errors) in errors.field_errors() {
         for error in field_errors {
-            let message = if let Some(msg) = &error.message {
-                msg.to_string()
-            } else {
-                format!("{}: {}", field, error.code)
-            };
-            html.push_str(&format!("<li>{message}</li>"));
+            let message = error.message.as_ref().map_or_else(
+                || format!("{field}: {}", error.code),
+                ToString::to_string,
+            );
+            let _ = write!(html, "<li>{message}</li>");
         }
     }
     html.push_str("</ul></div>");
