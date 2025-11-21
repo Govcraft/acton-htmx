@@ -11,6 +11,9 @@ keywords.workspace = true
 categories.workspace = true
 description = "Opinionated Rust web framework for HTMX applications"
 
+[lints]
+workspace = true
+
 [dependencies]
 # Workspace dependencies
 axum.workspace = true

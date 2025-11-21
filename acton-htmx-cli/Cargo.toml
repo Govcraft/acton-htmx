@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 description = "CLI tool for acton-htmx framework"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "acton-htmx"
 path = "src/main.rs"

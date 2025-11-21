@@ -43,30 +43,25 @@ enum DbCommands {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::New { name } => {
             println!("Creating new project: {name}");
-            Ok(())
         }
         Commands::Dev => {
             println!("Starting development server...");
-            Ok(())
         }
         Commands::Db { command } => match command {
             DbCommands::Migrate => {
                 println!("Running migrations...");
-                Ok(())
             }
             DbCommands::Reset => {
                 println!("Resetting database...");
-                Ok(())
             }
             DbCommands::Create { name } => {
                 println!("Creating migration: {name}");
-                Ok(())
             }
         },
     }
