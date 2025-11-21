@@ -49,6 +49,7 @@ impl TemplateRegistry {
     /// Get a cached template
     ///
     /// Returns `None` if caching is disabled or template not found.
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<String> {
         if !self.cache_enabled {
             return None;

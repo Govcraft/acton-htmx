@@ -1,0 +1,86 @@
+{# Error display partial - for form validation errors #}
+{% if errors %}
+<div class="errors-container" role="alert">
+    {% if errors.is_object() %}
+        {# Field-specific errors #}
+        <div class="field-errors">
+            {% for field, messages in errors %}
+            <div class="field-error" data-field="{{ field }}">
+                <strong>{{ field }}:</strong>
+                <ul>
+                    {% for message in messages %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        {# General errors #}
+        <div class="general-errors">
+            <h4>Errors occurred:</h4>
+            <ul>
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .errors-container {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        color: #721c24;
+    }
+
+    .errors-container h4 {
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .errors-container ul {
+        list-style: disc;
+        padding-left: 1.5rem;
+        margin: 0;
+    }
+
+    .errors-container li {
+        margin: 0.25rem 0;
+    }
+
+    .field-error {
+        margin-bottom: 0.75rem;
+    }
+
+    .field-error:last-child {
+        margin-bottom: 0;
+    }
+
+    .field-error strong {
+        text-transform: capitalize;
+    }
+
+    /* Inline field errors (attached to form fields) */
+    .field-error-inline {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+        display: block;
+    }
+
+    .form-control.has-error {
+        border-color: #dc3545;
+    }
+
+    .form-control.has-error:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+</style>
+{% endif %}

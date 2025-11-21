@@ -1,0 +1,117 @@
+{# HTMX Attribute Helpers #}
+{# These macros generate common HTMX attribute patterns #}
+
+{# Generate hx-get with optional target and swap #}
+{% macro hx_get(url, target="", swap="") %}
+hx-get="{{ url }}"
+{% if target %}hx-target="{{ target }}"{% endif %}
+{% if swap %}hx-swap="{{ swap }}"{% endif %}
+{% endmacro %}
+
+{# Generate hx-post with optional target and swap #}
+{% macro hx_post(url, target="", swap="") %}
+hx-post="{{ url }}"
+{% if target %}hx-target="{{ target }}"{% endif %}
+{% if swap %}hx-swap="{{ swap }}"{% endif %}
+{% endmacro %}
+
+{# Generate hx-put with optional target and swap #}
+{% macro hx_put(url, target="", swap="") %}
+hx-put="{{ url }}"
+{% if target %}hx-target="{{ target }}"{% endif %}
+{% if swap %}hx-swap="{{ swap }}"{% endif %}
+{% endmacro %}
+
+{# Generate hx-delete with optional target and swap #}
+{% macro hx_delete(url, target="", swap="", confirm="") %}
+hx-delete="{{ url }}"
+{% if target %}hx-target="{{ target }}"{% endif %}
+{% if swap %}hx-swap="{{ swap }}"{% endif %}
+{% if confirm %}hx-confirm="{{ confirm }}"{% endif %}
+{% endmacro %}
+
+{# Generate hx-trigger with optional modifiers #}
+{% macro hx_trigger(event, modifiers="") %}
+hx-trigger="{{ event }}{% if modifiers %} {{ modifiers }}{% endif %}"
+{% endmacro %}
+
+{# Generate loading indicator #}
+{% macro loading_indicator(text="Loading...") %}
+<span class="htmx-indicator">{{ text }}</span>
+{% endmacro %}
+
+{# Generate boost link (turns regular link into HTMX request) #}
+{% macro boost_link(url, text, target="#main-content") %}
+<a href="{{ url }}" hx-get="{{ url }}" hx-target="{{ target }}" hx-push-url="true">{{ text }}</a>
+{% endmacro %}
+
+{# Generate form with HTMX post #}
+{% macro htmx_form_start(action, method="post", target="", swap="innerHTML", csrf_token="") %}
+<form {% if method == "post" %}hx-post="{{ action }}"{% elif method == "put" %}hx-put="{{ action }}"{% elif method == "delete" %}hx-delete="{{ action }}"{% endif %}
+      {% if target %}hx-target="{{ target }}"{% endif %}
+      hx-swap="{{ swap }}">
+    {% if csrf_token %}
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+{% endmacro %}
+
+{% macro htmx_form_end() %}
+</form>
+{% endmacro %}
+
+{# Generate infinite scroll trigger #}
+{% macro infinite_scroll(url, target) %}
+hx-get="{{ url }}"
+hx-trigger="revealed"
+hx-target="{{ target }}"
+hx-swap="beforeend"
+{% endmacro %}
+
+{# Generate polling trigger #}
+{% macro poll(url, interval="2s", target="") %}
+hx-get="{{ url }}"
+hx-trigger="every {{ interval }}"
+{% if target %}hx-target="{{ target }}"{% endif %}
+{% endmacro %}
+
+{# Generate active search (search-as-you-type) #}
+{% macro active_search(url, target, name="q", placeholder="Search...") %}
+<input type="search"
+       name="{{ name }}"
+       placeholder="{{ placeholder }}"
+       hx-get="{{ url }}"
+       hx-trigger="input changed delay:500ms, search"
+       hx-target="{{ target }}"
+       hx-indicator=".htmx-indicator">
+{{ self::loading_indicator() }}
+{% endmacro %}
+
+{# Generate out-of-band swap target #}
+{% macro oob_target(id) %}
+id="{{ id }}" hx-swap-oob="true"
+{% endmacro %}
+
+{# Generate confirm dialog #}
+{% macro confirm_action(message) %}
+hx-confirm="{{ message }}"
+{% endmacro %}
+
+{# Generate push URL #}
+{% macro push_url(enabled=true) %}
+hx-push-url="{% if enabled %}true{% else %}false{% endif %}"
+{% endmacro %}
+
+{# Generate select (disable during request) #}
+{% macro disable_during_request() %}
+hx-disabled-elt="this"
+{% endmacro %}
+
+{# Common swap strategies #}
+{% macro swap_inner() %}hx-swap="innerHTML"{% endmacro %}
+{% macro swap_outer() %}hx-swap="outerHTML"{% endmacro %}
+{% macro swap_before_begin() %}hx-swap="beforebegin"{% endmacro %}
+{% macro swap_after_begin() %}hx-swap="afterbegin"{% endmacro %}
+{% macro swap_before_end() %}hx-swap="beforeend"{% endmacro %}
+{% macro swap_after_end() %}hx-swap="afterend"{% endmacro %}
+{% macro swap_delete() %}hx-swap="delete"{% endmacro %}
+{% macro swap_none() %}hx-swap="none"{% endmacro %}

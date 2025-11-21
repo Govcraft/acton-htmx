@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    /* Navigation */
+    nav {
+        background-color: #1976d2;
+        color: white;
+        padding: 1rem 0;
+        margin-bottom: 2rem;
+    }
+
+    nav .nav-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    nav .brand {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: white;
+        text-decoration: none;
+    }
+
+    nav ul {
+        list-style: none;
+        display: flex;
+        gap: 2rem;
+    }
+
+    nav a {
+        color: white;
+        text-decoration: none;
+        transition: opacity 0.2s;
+    }
+
+    nav a:hover {
+        opacity: 0.8;
+    }
+
+    /* Main content area */
+    main {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        min-height: 400px;
+    }
+
+    /* Footer */
+    footer {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
+        margin-top: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav>
+    <div class="nav-container">
+        <a href="/" class="brand">{% block brand %}acton-htmx{% endblock %}</a>
+        <ul>
+            {% block nav_items %}
+            <li><a href="/">Home</a></li>
+            {% if user %}
+            <li><a href="/dashboard">Dashboard</a></li>
+            <li><a href="/logout" hx-post="/logout" hx-target="body">Logout</a></li>
+            {% else %}
+            <li><a href="/login">Login</a></li>
+            <li><a href="/register">Register</a></li>
+            {% endif %}
+            {% endblock %}
+        </ul>
+    </div>
+</nav>
+
+<main id="main-content">
+    {% block main %}{% endblock %}
+</main>
+
+<footer>
+    {% block footer %}
+    <p>Powered by acton-htmx</p>
+    {% endblock %}
+</footer>
+{% endblock %}
