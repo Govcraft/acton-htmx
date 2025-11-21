@@ -34,7 +34,7 @@ acton-reactive.workspace = true
 tokio.workspace = true
 axum-htmx.workspace = true
 askama.workspace = true
-validator.workspace = true
+validator = { workspace = true, features = ["derive"] }
 argon2.workspace = true
 rand.workspace = true
 sha2.workspace = true

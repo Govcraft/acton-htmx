@@ -239,6 +239,121 @@ impl From<&str> for SafeString {
     }
 }
 
+// =============================================================================
+// Validation Error Helpers
+// =============================================================================
+
+/// Render validation errors for a specific field
+///
+/// Returns HTML markup for displaying validation errors next to form fields.
+///
+/// # Examples
+///
+/// ```rust
+/// use acton_htmx::template::helpers::validation_errors_for;
+/// use validator::ValidationErrors;
+///
+/// let errors = ValidationErrors::new();
+/// let html = validation_errors_for(&errors, "email");
+/// ```
+#[must_use]
+pub fn validation_errors_for(errors: &validator::ValidationErrors, field: &str) -> String {
+    if let Some(field_errors) = errors.field_errors().get(field) {
+        let mut html = String::from(r#"<div class="field-errors">"#);
+        for error in *field_errors {
+            let message = if let Some(msg) = &error.message {
+                msg.to_string()
+            } else {
+                format!("{}: {}", field, error.code)
+            };
+            html.push_str(&format!(r#"<span class="error">{message}</span>"#));
+        }
+        html.push_str("</div>");
+        html
+    } else {
+        String::new()
+    }
+}
+
+/// Check if a field has validation errors
+///
+/// Useful for conditionally applying error classes in templates.
+///
+/// # Examples
+///
+/// ```rust
+/// use acton_htmx::template::helpers::has_error;
+/// use validator::ValidationErrors;
+///
+/// let errors = ValidationErrors::new();
+/// let has_err = has_error(&errors, "email");
+/// assert!(!has_err);
+/// ```
+#[must_use]
+pub fn has_error(errors: &validator::ValidationErrors, field: &str) -> bool {
+    errors.field_errors().contains_key(field)
+}
+
+/// Get error class string if field has errors
+///
+/// Returns " error" or " is-invalid" if the field has errors, empty string otherwise.
+/// Useful for conditionally applying CSS classes.
+///
+/// # Examples
+///
+/// ```rust
+/// use acton_htmx::template::helpers::error_class;
+/// use validator::ValidationErrors;
+///
+/// let mut errors = ValidationErrors::new();
+/// errors.add("email", validator::ValidationError::new("email"));
+///
+/// let class = error_class(&errors, "email");
+/// assert_eq!(class, " error");
+/// ```
+#[must_use]
+pub fn error_class(errors: &validator::ValidationErrors, field: &str) -> &'static str {
+    if has_error(errors, field) {
+        " error"
+    } else {
+        ""
+    }
+}
+
+/// Render all validation errors as an unordered list
+///
+/// Useful for displaying all errors at the top of a form.
+///
+/// # Examples
+///
+/// ```rust
+/// use acton_htmx::template::helpers::validation_errors_list;
+/// use validator::ValidationErrors;
+///
+/// let errors = ValidationErrors::new();
+/// let html = validation_errors_list(&errors);
+/// ```
+#[must_use]
+pub fn validation_errors_list(errors: &validator::ValidationErrors) -> String {
+    if errors.is_empty() {
+        return String::new();
+    }
+
+    let mut html = String::from(r#"<div class="validation-errors"><ul>"#);
+    for (field, field_errors) in errors.field_errors() {
+        for error in field_errors {
+            let message = if let Some(msg) = &error.message {
+                msg.to_string()
+            } else {
+                format!("{}: {}", field, error.code)
+            };
+            html.push_str(&format!("<li>{message}</li>"));
+        }
+    }
+    html.push_str("</ul></div>");
+    html
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,5 +418,71 @@ mod tests {
     fn test_safe_string_from() {
         let safe: SafeString = "test".into();
         assert_eq!(safe.0, "test");
+    }
+
+    #[test]
+    fn test_validation_errors_for() {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add(
+            "email",
+            validator::ValidationError::new("email")
+                .with_message(std::borrow::Cow::Borrowed("Invalid email")),
+        );
+
+        let html = validation_errors_for(&errors, "email");
+        assert!(html.contains("Invalid email"));
+        assert!(html.contains("field-errors"));
+    }
+
+    #[test]
+    fn test_validation_errors_for_no_errors() {
+        let errors = validator::ValidationErrors::new();
+        let html = validation_errors_for(&errors, "email");
+        assert!(html.is_empty());
+    }
+
+    #[test]
+    fn test_has_error() {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("email", validator::ValidationError::new("email"));
+
+        assert!(has_error(&errors, "email"));
+        assert!(!has_error(&errors, "password"));
+    }
+
+    #[test]
+    fn test_error_class() {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add("email", validator::ValidationError::new("email"));
+
+        assert_eq!(error_class(&errors, "email"), " error");
+        assert_eq!(error_class(&errors, "password"), "");
+    }
+
+    #[test]
+    fn test_validation_errors_list() {
+        let mut errors = validator::ValidationErrors::new();
+        errors.add(
+            "email",
+            validator::ValidationError::new("email")
+                .with_message(std::borrow::Cow::Borrowed("Invalid email")),
+        );
+        errors.add(
+            "password",
+            validator::ValidationError::new("length")
+                .with_message(std::borrow::Cow::Borrowed("Too short")),
+        );
+
+        let html = validation_errors_list(&errors);
+        assert!(html.contains("Invalid email"));
+        assert!(html.contains("Too short"));
+        assert!(html.contains("<ul>"));
+    }
+
+    #[test]
+    fn test_validation_errors_list_empty() {
+        let errors = validator::ValidationErrors::new();
+        let html = validation_errors_list(&errors);
+        assert!(html.is_empty());
     }
 }
