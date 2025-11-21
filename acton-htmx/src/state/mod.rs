@@ -19,18 +19,18 @@ use std::sync::Arc;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use acton_htmx::state::ActonHtmxState;
 ///
-/// # async fn example() -> anyhow::Result<()> {
-/// let state = ActonHtmxState::new().await?;
+/// async fn example() -> anyhow::Result<()> {
+///     let state = ActonHtmxState::new()?;
 ///
-/// // Use in Axum
-/// let app = axum::Router::new()
-///     .route("/", axum::routing::get(|| async { "Hello!" }))
-///     .with_state(state);
-/// # Ok(())
-/// # }
+///     // Use in Axum
+///     let app = axum::Router::new()
+///         .route("/", axum::routing::get(|| async { "Hello!" }))
+///         .with_state(state);
+///     Ok(())
+/// }
 /// ```
 #[derive(Clone)]
 pub struct ActonHtmxState {
@@ -50,12 +50,13 @@ impl ActonHtmxState {
     /// ```rust
     /// use acton_htmx::state::ActonHtmxState;
     ///
-    /// # async fn example() -> anyhow::Result<()> {
-    /// let state = ActonHtmxState::new().await?;
+    /// # fn example() -> anyhow::Result<()> {
+    /// let state = ActonHtmxState::new()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn new() -> anyhow::Result<Self> {
+    // TODO: Will become async when actor runtime initialization is added
+    pub fn new() -> anyhow::Result<Self> {
         let config = ActonHtmxConfig::default();
         let observability = ObservabilityConfig::default();
 
@@ -72,13 +73,14 @@ impl ActonHtmxState {
     /// ```rust
     /// use acton_htmx::{config::ActonHtmxConfig, state::ActonHtmxState};
     ///
-    /// # async fn example() -> anyhow::Result<()> {
+    /// # fn example() -> anyhow::Result<()> {
     /// let config = ActonHtmxConfig::load_for_service("my-app")?;
-    /// let state = ActonHtmxState::with_config(config).await?;
+    /// let state = ActonHtmxState::with_config(config)?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn with_config(config: ActonHtmxConfig) -> anyhow::Result<Self> {
+    // TODO: Will become async when actor runtime initialization is added
+    pub fn with_config(config: ActonHtmxConfig) -> anyhow::Result<Self> {
         let observability = ObservabilityConfig::new("acton-htmx");
 
         Ok(Self {
@@ -95,7 +97,7 @@ impl ActonHtmxState {
     /// use acton_htmx::state::ActonHtmxState;
     ///
     /// # async fn example() -> anyhow::Result<()> {
-    /// let state = ActonHtmxState::new().await?;
+    /// let state = ActonHtmxState::new()?;
     /// let config = state.config();
     ///
     /// let timeout = config.htmx.request_timeout_ms;
@@ -120,25 +122,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_state() {
-        let state = ActonHtmxState::new().await.expect("Failed to create state");
+        let state = ActonHtmxState::new().expect("Failed to create state");
         assert_eq!(state.config().htmx.request_timeout_ms, 5000);
     }
 
-    #[tokio::test]
-    async fn test_with_config() {
+    #[test]
+    fn test_with_config() {
         let mut config = ActonHtmxConfig::default();
         config.htmx.request_timeout_ms = 10000;
 
-        let state = ActonHtmxState::with_config(config)
-            .await
-            .expect("Failed to create state");
+        let state =
+            ActonHtmxState::with_config(config).expect("Failed to create state");
 
         assert_eq!(state.config().htmx.request_timeout_ms, 10000);
     }
 
-    #[tokio::test]
-    async fn test_clone_state() {
-        let state = ActonHtmxState::new().await.expect("Failed to create state");
+    #[test]
+    fn test_clone_state() {
+        let state = ActonHtmxState::new().expect("Failed to create state");
         let cloned = state.clone();
 
         // Both should reference the same Arc

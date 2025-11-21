@@ -89,14 +89,14 @@ impl ObservabilityConfig {
 
     /// Enable metrics collection
     #[must_use]
-    pub fn with_metrics(mut self) -> Self {
+    pub const fn with_metrics(mut self) -> Self {
         self.metrics_enabled = true;
         self
     }
 
     /// Enable distributed tracing
     #[must_use]
-    pub fn with_tracing(mut self) -> Self {
+    pub const fn with_tracing(mut self) -> Self {
         self.tracing_enabled = true;
         self
     }

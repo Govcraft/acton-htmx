@@ -39,19 +39,15 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
+//! ```rust
 //! use acton_htmx::config::ActonHtmxConfig;
 //!
-//! # async fn example() -> anyhow::Result<()> {
-//! let config = ActonHtmxConfig::load_for_service("my-app")?;
-//!
-//! // Access framework config
-//! let port = config.service.port;
+//! // Load default configuration
+//! let config = ActonHtmxConfig::default();
 //!
 //! // Access HTMX-specific config
 //! let timeout = config.htmx.request_timeout_ms;
-//! # Ok(())
-//! # }
+//! let csrf_enabled = config.security.csrf_enabled;
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -127,7 +123,7 @@ pub struct SecuritySettings {
     /// Enable secure cookies (HTTPS only)
     pub secure_cookies: bool,
 
-    /// Cookie SameSite policy
+    /// Cookie `SameSite` policy
     pub same_site: SameSitePolicy,
 
     /// Enable security headers middleware
@@ -146,15 +142,15 @@ impl Default for SecuritySettings {
     }
 }
 
-/// Cookie SameSite policy
+/// Cookie `SameSite` policy
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SameSitePolicy {
-    /// Strict SameSite policy
+    /// Strict `SameSite` policy
     Strict,
-    /// Lax SameSite policy (recommended)
+    /// Lax `SameSite` policy (recommended)
     Lax,
-    /// None SameSite policy (requires secure cookies)
+    /// None `SameSite` policy (requires secure cookies)
     None,
 }
 
@@ -234,6 +230,7 @@ impl ActonHtmxConfig {
     /// let path = ActonHtmxConfig::recommended_path("my-app");
     /// // Returns: ~/.config/acton-htmx/my-app/config.toml
     /// ```
+    #[must_use]
     pub fn recommended_path(_service_name: &str) -> PathBuf {
         // TODO: Implement XDG path resolution
         PathBuf::from("./config.toml")

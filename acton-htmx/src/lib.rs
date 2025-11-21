@@ -20,7 +20,7 @@
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Initialize application state
-//!     let state = ActonHtmxState::new().await?;
+//!     let state = ActonHtmxState::new()?;
 //!
 //!     // Build router with HTMX handlers
 //!     let app = axum::Router::new()
@@ -41,9 +41,9 @@
 //!
 //! # Features
 //!
-//! - `postgres` - PostgreSQL database support (default)
-//! - `sqlite` - SQLite database support
-//! - `mysql` - MySQL database support
+//! - `postgres` - `PostgreSQL` database support (default)
+//! - `sqlite` - `SQLite` database support
+//! - `mysql` - `MySQL` database support
 //! - `redis` - Redis session and cache support (default)
 //! - `otel-metrics` - OpenTelemetry metrics collection
 //!
@@ -51,11 +51,8 @@
 //!
 //! See the [architecture overview](../../../.claude/architecture-overview.md) for details.
 
-#![forbid(unsafe_code)]
-#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
-#![warn(clippy::cargo)]
-// Allow specific lints where justified
-#![allow(clippy::module_name_repetitions)] // Clear naming is more important than brevity
+// Lint configuration is handled at the workspace level in Cargo.toml
+// Additional crate-specific allows:
 #![allow(clippy::missing_errors_doc)] // TODO: Add comprehensive error docs before 1.0
 
 // Public modules (exported in public API)
@@ -69,8 +66,10 @@ pub mod observability;
 pub mod state;
 pub mod template;
 
+// Public modules for actors and agents
+pub mod agents;
+
 // Internal modules (not re-exported, implementation details)
-mod agents;
 mod cache;
 mod database;
 mod health;
@@ -80,9 +79,10 @@ mod security;
 #[cfg(test)]
 pub mod testing;
 
-/// Convenience re-exports for common types and traits
 pub mod prelude {
-    //! Commonly used types and traits for building HTMX applications
+    //! Convenience re-exports for common types and traits
+    //!
+    //! Commonly used types and traits for building applications
     //!
     //! # Examples
     //!
@@ -114,16 +114,19 @@ pub mod prelude {
         HxTarget,
         HxTrigger,
         HxTriggerName,
+        // acton-htmx extensions
+        HxSwapOob,
+        SwapStrategy,
     };
-
-    // TODO: acton-htmx extensions (to be implemented)
-    // pub use crate::htmx::{HxSwapOob, HxResponse};
 
     // Template traits
     pub use crate::template::{HxTemplate, TemplateRegistry};
 
     // Form handling
-    pub use crate::forms::FormBuilder;
+    pub use crate::forms::{
+        FieldBuilder, FieldError, FormBuilder, FormField, FormRenderOptions, FormRenderer,
+        InputType, SelectOption, ValidationErrors,
+    };
 
     // Authentication extractors
     pub use crate::auth::{Authenticated, OptionalAuth, Session};
