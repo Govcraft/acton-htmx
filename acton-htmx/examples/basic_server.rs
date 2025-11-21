@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting acton-htmx basic server");
 
     // Create application state
-    let state = ActonHtmxState::new().await?;
+    let state = ActonHtmxState::new()?;
 
     tracing::info!(
         timeout_ms = state.config().htmx.request_timeout_ms,

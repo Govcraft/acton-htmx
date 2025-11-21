@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     observability::init()?;
 
     // Create application state
-    let state = ActonHtmxState::new().await?;
+    let state = ActonHtmxState::new()?;
 
     // Build router
     let app = Router::new()

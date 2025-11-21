@@ -3,12 +3,11 @@
 //! Tests the HxRequest extractor and related HTMX header parsing.
 
 use axum::{
-    extract::State,
     routing::{get, post},
     Router,
 };
 use axum_htmx::{HxBoosted, HxCurrentUrl, HxHistoryRestoreRequest, HxPrompt, HxRequest, HxTarget};
-use http::{header, Method, StatusCode};
+use http::{Method, StatusCode};
 use tower::ServiceExt;
 
 /// Helper to create a test app
