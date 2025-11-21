@@ -6,7 +6,11 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage = "https://acton-htmx.dev"
+keywords = ["web", "framework", "htmx", "cli"]
+categories = ["web-programming::http-server", "command-line-utilities"]
 description = "CLI tool for acton-htmx framework"
+readme = "../README.md"
 
 [lints]
 workspace = true

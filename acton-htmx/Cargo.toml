@@ -10,6 +10,7 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Opinionated Rust web framework for HTMX applications"
+readme = "../README.md"
 
 [lints]
 workspace = true
@@ -33,7 +34,6 @@ acton-reactive.workspace = true
 tokio.workspace = true
 axum-htmx.workspace = true
 askama.workspace = true
-askama_axum.workspace = true
 validator.workspace = true
 argon2.workspace = true
 rand.workspace = true

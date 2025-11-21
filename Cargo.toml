@@ -16,14 +16,16 @@ all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 cargo = { level = "warn", priority = -1 }
-# Allow during alpha development (these are from the cargo lint group)
+# Allow during alpha development
 cargo_common_metadata = "allow"
-multiple_crate_versions = "allow"
+multiple_crate_versions = { level = "allow", priority = 1 }
+doc_markdown = "allow"
+module_name_repetitions = "allow"
 
 [workspace.package]
 version = "1.0.0-alpha.1"
 edition = "2021"
-rust-version = "1.87.0"
+rust-version = "1.83.0"
 authors = ["Acton Contributors"]
 license = "MIT"
 repository = "https://github.com/GovCraft/acton-htmx"
@@ -42,32 +44,31 @@ deadpool-redis = "0.22"
 figment = { version = "0.10", features = ["toml", "env", "json"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-opentelemetry = "0.30"
-opentelemetry-otlp = { version = "0.30", features = ["grpc-tonic"] }
+opentelemetry = "0.31"
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
 tower-resilience = "0.3"
 jsonwebtoken = "10"
-governor = "0.8"
+governor = "0.10.2"
 
 # From acton-reactive - Actor runtime
-acton-reactive = "1.1.0-beta"
+acton-reactive = "5"
 tokio = { version = "1", features = ["full"] }
 
 # HTMX-specific - Template engine and integration
 axum-htmx = { version = "0.8", features = ["auto-vary", "guards", "serde"] }
-askama = { version = "0.12", features = ["with-axum"] }
-askama_axum = "0.4"
-validator = { version = "0.18", features = ["derive"] }
+askama = "0.14"
+validator = { version = "0.20", features = ["derive"] }
 
 # Security & crypto
 argon2 = "0.5"
-rand = "0.8"
+rand = "0.9"
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
+toml = "0.9"
 
 # Error handling
 thiserror = "2"
@@ -99,9 +100,9 @@ proc-macro2 = "1"
 
 # CLI
 clap = { version = "4", features = ["derive", "cargo"] }
-console = "0.15"
-indicatif = "0.17"
-dialoguer = "0.11"
+console = "0.16"
+indicatif = "0.18"
+dialoguer = "0.12"
 
 [profile.dev]
 opt-level = 0
