@@ -65,6 +65,7 @@ pub mod error;
 pub mod extractors;
 pub mod forms;
 pub mod htmx;
+pub mod observability;
 pub mod state;
 pub mod template;
 
@@ -74,7 +75,6 @@ mod cache;
 mod database;
 mod health;
 mod middleware;
-mod observability;
 mod security;
 
 #[cfg(test)]
