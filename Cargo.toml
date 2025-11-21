@@ -9,7 +9,7 @@ resolver = "2"
 [workspace.package]
 version = "1.0.0-alpha.1"
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.87.0"
 authors = ["Acton Contributors"]
 license = "MIT"
 repository = "https://github.com/GovCraft/acton-htmx"
@@ -38,7 +38,8 @@ governor = "0.8"
 acton-reactive = "1.1.0-beta"
 tokio = { version = "1", features = ["full"] }
 
-# HTMX-specific - Template engine
+# HTMX-specific - Template engine and integration
+axum-htmx = { version = "0.8", features = ["auto-vary", "guards", "serde"] }
 askama = { version = "0.12", features = ["with-axum"] }
 askama_axum = "0.4"
 validator = { version = "0.18", features = ["derive"] }

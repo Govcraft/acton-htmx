@@ -1,28 +1,35 @@
 //! HTMX response types and extractors
 //!
-//! Type-safe wrappers for HTMX HTTP headers.
+//! This module builds on `axum-htmx` with additional features:
+//! - Out-of-band swaps (`HxSwapOob`)
+//! - Automatic template detection (`HxTemplate`)
+//! - Smart response enum (`HxResponse`)
+//!
+//! # Re-exported from axum-htmx
+//!
+//! All request extractors and response helpers from `axum-htmx` are re-exported
+//! for convenience. See [axum-htmx documentation](https://docs.rs/axum-htmx) for
+//! detailed usage.
 
 #![allow(dead_code)]
 
-// TODO: Implement HTMX types
+// Re-export axum-htmx request extractors
+pub use axum_htmx::{
+    HxBoosted, HxCurrentUrl, HxHistoryRestoreRequest, HxPrompt, HxRequest, HxTarget, HxTrigger,
+    HxTriggerName,
+};
 
-/// HTMX request extractor
-pub struct HxRequest;
+// Re-export axum-htmx response helpers
+pub use axum_htmx::{
+    HxLocation, HxPushUrl, HxRedirect, HxRefresh, HxReplaceUrl, HxReselect, HxResponseTrigger,
+    HxReswap, HxRetarget,
+};
 
-/// HTMX response wrapper
-pub struct HxResponse;
+// Re-export axum-htmx middleware and guards
+pub use axum_htmx::{AutoVaryLayer, HxRequestGuardLayer};
 
-/// HX-Redirect response
-pub struct HxRedirect;
-
-/// HX-Trigger response
-pub struct HxTrigger;
-
-/// HX-Swap-OOB response
-pub struct HxSwapOob;
-
-/// HX-Reswap response
-pub struct HxReswap;
-
-/// HX-Retarget response
-pub struct HxRetarget;
+// TODO: Implement acton-htmx extensions
+// mod swap_oob;
+// mod response;
+// pub use swap_oob::HxSwapOob;
+// pub use response::HxResponse;

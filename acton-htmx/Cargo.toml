@@ -28,6 +28,7 @@ tower-resilience.workspace = true
 governor.workspace = true
 acton-reactive.workspace = true
 tokio.workspace = true
+axum-htmx.workspace = true
 askama.workspace = true
 askama_axum.workspace = true
 validator.workspace = true

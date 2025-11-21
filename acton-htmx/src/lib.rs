@@ -90,10 +90,34 @@ pub mod prelude {
     //! use acton_htmx::prelude::*;
     //! ```
 
-    // HTMX response types
+    // HTMX extractors and responders (from axum-htmx)
     pub use crate::htmx::{
-        HxRedirect, HxRequest, HxResponse, HxReswap, HxRetarget, HxSwapOob, HxTrigger,
+        // Middleware
+        AutoVaryLayer,
+        // Request extractors
+        HxBoosted,
+        HxCurrentUrl,
+        HxHistoryRestoreRequest,
+        // Response helpers
+        HxLocation,
+        HxPrompt,
+        HxPushUrl,
+        HxRedirect,
+        HxRefresh,
+        HxReplaceUrl,
+        HxRequest,
+        HxRequestGuardLayer,
+        HxReselect,
+        HxResponseTrigger,
+        HxReswap,
+        HxRetarget,
+        HxTarget,
+        HxTrigger,
+        HxTriggerName,
     };
+
+    // TODO: acton-htmx extensions (to be implemented)
+    // pub use crate::htmx::{HxSwapOob, HxResponse};
 
     // Template traits
     pub use crate::template::{HxTemplate, TemplateRegistry};
