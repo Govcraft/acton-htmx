@@ -5,16 +5,25 @@
 
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+    ClientSecret, CsrfToken, EndpointNotSet, EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
 use openidconnect::{
-    core::{CoreClient, CoreProviderMetadata},
+    core::CoreProviderMetadata,
     IssuerUrl,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::oauth2::types::{OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
+
+// BasicClient with auth and token endpoints set
+type ConfiguredClient = BasicClient<
+    EndpointSet,          // HasAuthUrl
+    EndpointNotSet,       // HasDeviceAuthUrl
+    EndpointNotSet,       // HasIntrospectionUrl
+    EndpointNotSet,       // HasRevocationUrl
+    EndpointSet,          // HasTokenUrl
+>;
 
 /// Async HTTP client for OAuth2 requests
 async fn async_http_client(
@@ -24,11 +33,16 @@ async fn async_http_client(
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    let mut request_builder = client
-        .request(request.method, request.url.as_str())
-        .body(request.body);
+    let method = request.method().clone();
+    let url = request.uri().to_string();
+    let headers = request.headers().clone();
+    let body = request.into_body();
 
-    for (name, value) in &request.headers {
+    let mut request_builder = client
+        .request(method, &url)
+        .body(body);
+
+    for (name, value) in &headers {
         request_builder = request_builder.header(name.as_str(), value.as_bytes());
     }
 
@@ -43,17 +57,17 @@ async fn async_http_client(
         .await?
         .to_vec();
 
-    Ok(oauth2::HttpResponse {
-        status_code,
-        headers,
-        body,
-    })
+    let mut builder = http::Response::builder().status(status_code);
+    for (name, value) in &headers {
+        builder = builder.header(name, value);
+    }
+    // This should never fail as we're building with valid components
+    Ok(builder.body(body).expect("Failed to build HTTP response"))
 }
 
 /// Generic OpenID Connect provider
 pub struct OidcProvider {
-    client: BasicClient,
-    openid_client: CoreClient,
+    client: ConfiguredClient,
     userinfo_url: String,
 }
 
@@ -68,7 +82,7 @@ impl OidcProvider {
         // 1. Discovery via issuer URL (auth_url field)
         // 2. Manual configuration (auth_url, token_url, userinfo_url)
 
-        let (client, openid_client, userinfo_url) = if let Some(issuer_url) = &config.auth_url {
+        let (client, userinfo_url) = if let Some(issuer_url) = &config.auth_url {
             // Try discovery first
             Self::discover(config, issuer_url).await?
         } else {
@@ -91,7 +105,6 @@ impl OidcProvider {
 
         Ok(Self {
             client,
-            openid_client,
             userinfo_url,
         })
     }
@@ -100,11 +113,11 @@ impl OidcProvider {
     async fn discover(
         config: &ProviderConfig,
         issuer: &str,
-    ) -> Result<(BasicClient, CoreClient, String), OAuthError> {
+    ) -> Result<(ConfiguredClient, String), OAuthError> {
         let issuer_url = IssuerUrl::new(issuer.to_string())
             .map_err(|e| OAuthError::Generic(format!("Invalid issuer URL: {e}")))?;
 
-        let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, async_http_client)
+        let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, &async_http_client)
             .await
             .map_err(|e| OAuthError::Generic(format!("Failed to discover provider: {e}")))?;
 
@@ -113,39 +126,31 @@ impl OidcProvider {
             .ok_or_else(|| OAuthError::Generic("Provider has no userinfo endpoint".to_string()))?
             .to_string();
 
-        let openid_client = CoreClient::from_provider_metadata(
-            provider_metadata.clone(),
-            ClientId::new(config.client_id.clone()),
-            Some(ClientSecret::new(config.client_secret.clone())),
-        )
-        .set_redirect_uri(
-            RedirectUrl::new(config.redirect_uri.clone())
-                .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-        );
-
         let auth_url = provider_metadata
             .authorization_endpoint()
             .to_string();
         let token_url = provider_metadata
             .token_endpoint()
+            .ok_or_else(|| OAuthError::Generic("Provider has no token endpoint".to_string()))?
             .to_string();
 
-        let client = BasicClient::new(
-            ClientId::new(config.client_id.clone()),
-            Some(ClientSecret::new(config.client_secret.clone())),
-            AuthUrl::new(auth_url)
-                .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
-            Some(
+        // oauth2 5.0 API: BasicClient::new() only takes ClientId
+        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
+            .set_client_secret(ClientSecret::new(config.client_secret.clone()))
+            .set_auth_uri(
+                AuthUrl::new(auth_url)
+                    .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
+            )
+            .set_token_uri(
                 TokenUrl::new(token_url)
                     .map_err(|e| OAuthError::Generic(format!("Invalid token URL: {e}")))?,
-            ),
-        )
-        .set_redirect_uri(
-            RedirectUrl::new(config.redirect_uri.clone())
-                .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-        );
+            )
+            .set_redirect_uri(
+                RedirectUrl::new(config.redirect_uri.clone())
+                    .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
+            );
 
-        Ok((client, openid_client, userinfo_url))
+        Ok((client, userinfo_url))
     }
 
     /// Manual OIDC configuration (no discovery)
@@ -154,27 +159,24 @@ impl OidcProvider {
         auth_url: &str,
         token_url: &str,
         userinfo_url: &str,
-    ) -> Result<(BasicClient, CoreClient, String), OAuthError> {
-        let client = BasicClient::new(
-            ClientId::new(config.client_id.clone()),
-            Some(ClientSecret::new(config.client_secret.clone())),
-            AuthUrl::new(auth_url.to_string())
-                .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
-            Some(
+    ) -> Result<(ConfiguredClient, String), OAuthError> {
+        // oauth2 5.0 API: BasicClient::new() only takes ClientId
+        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
+            .set_client_secret(ClientSecret::new(config.client_secret.clone()))
+            .set_auth_uri(
+                AuthUrl::new(auth_url.to_string())
+                    .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
+            )
+            .set_token_uri(
                 TokenUrl::new(token_url.to_string())
                     .map_err(|e| OAuthError::Generic(format!("Invalid token URL: {e}")))?,
-            ),
-        )
-        .set_redirect_uri(
-            RedirectUrl::new(config.redirect_uri.clone())
-                .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-        );
+            )
+            .set_redirect_uri(
+                RedirectUrl::new(config.redirect_uri.clone())
+                    .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
+            );
 
-        // For manual config, we create a minimal CoreClient
-        // This is a placeholder since we don't use CoreClient for manual config
-        let openid_client = client.clone();
-
-        Ok((client, openid_client, userinfo_url.to_string()))
+        Ok((client, userinfo_url.to_string()))
     }
 
     /// Generate authorization URL and CSRF state
@@ -184,15 +186,14 @@ impl OidcProvider {
     pub fn authorization_url(&self) -> (String, String, String) {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-        let mut request = self
+        let (auth_url, csrf_state) = self
             .client
             .authorize_url(CsrfToken::new_random)
             .add_scope(Scope::new("openid".to_string()))
             .add_scope(Scope::new("email".to_string()))
             .add_scope(Scope::new("profile".to_string()))
-            .set_pkce_challenge(pkce_challenge);
-
-        let (auth_url, csrf_state) = request.url();
+            .set_pkce_challenge(pkce_challenge)
+            .url();
 
         (
             auth_url.to_string(),
@@ -215,7 +216,7 @@ impl OidcProvider {
             .client
             .exchange_code(AuthorizationCode::new(code.to_string()))
             .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.to_string()))
-            .request_async(async_http_client)
+            .request_async(&async_http_client)
             .await
             .map_err(|e| OAuthError::TokenExchangeFailed(e.to_string()))?;
 

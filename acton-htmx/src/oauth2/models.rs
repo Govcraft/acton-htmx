@@ -3,9 +3,9 @@
 //! This module provides the `OAuthAccount` model for managing OAuth2 provider
 //! accounts linked to users.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
-use time::OffsetDateTime;
 
 use super::types::{OAuthProvider, OAuthUserInfo};
 
@@ -31,9 +31,9 @@ pub struct OAuthAccount {
     /// Avatar URL from OAuth provider
     pub avatar_url: Option<String>,
     /// When the account was linked
-    pub created_at: OffsetDateTime,
+    pub created_at: DateTime<Utc>,
     /// When the account was last updated
-    pub updated_at: OffsetDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl OAuthAccount {

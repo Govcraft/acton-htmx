@@ -30,4 +30,16 @@ pub enum ActonHtmxError {
     /// Session error
     #[error("Session error: {0}")]
     SessionError(#[from] crate::auth::SessionError),
+
+    /// Unauthorized (401)
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    /// Forbidden (403)
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
+    /// Not Found (404)
+    #[error("Not found: {0}")]
+    NotFound(String),
 }

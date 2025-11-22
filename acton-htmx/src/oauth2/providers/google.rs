@@ -5,16 +5,21 @@
 
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+    ClientSecret, CsrfToken, EndpointNotSet, EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
-};
-use openidconnect::{
-    core::{CoreClient, CoreProviderMetadata},
-    IssuerUrl,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::oauth2::types::{OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
+
+// BasicClient with auth and token endpoints set
+type ConfiguredClient = BasicClient<
+    EndpointSet,          // HasAuthUrl
+    EndpointNotSet,       // HasDeviceAuthUrl
+    EndpointNotSet,       // HasIntrospectionUrl
+    EndpointNotSet,       // HasRevocationUrl
+    EndpointSet,          // HasTokenUrl
+>;
 
 /// Async HTTP client for OAuth2 requests
 async fn async_http_client(
@@ -24,11 +29,16 @@ async fn async_http_client(
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    let mut request_builder = client
-        .request(request.method, request.url.as_str())
-        .body(request.body);
+    let method = request.method().clone();
+    let url = request.uri().to_string();
+    let headers = request.headers().clone();
+    let body = request.into_body();
 
-    for (name, value) in &request.headers {
+    let mut request_builder = client
+        .request(method, &url)
+        .body(body);
+
+    for (name, value) in &headers {
         request_builder = request_builder.header(name.as_str(), value.as_bytes());
     }
 
@@ -37,23 +47,23 @@ async fn async_http_client(
         .await?;
 
     let status_code = response.status();
-    let headers = response.headers().to_owned();
-    let body = response
+    let response_headers = response.headers().to_owned();
+    let response_body = response
         .bytes()
         .await?
         .to_vec();
 
-    Ok(oauth2::HttpResponse {
-        status_code,
-        headers,
-        body,
-    })
+    let mut builder = http::Response::builder().status(status_code);
+    for (name, value) in &response_headers {
+        builder = builder.header(name, value);
+    }
+    // This should never fail as we're building with valid components
+    Ok(builder.body(response_body).expect("Failed to build HTTP response"))
 }
 
 /// Google OAuth2 provider
 pub struct GoogleProvider {
-    client: BasicClient,
-    openid_client: CoreClient,
+    client: ConfiguredClient,
 }
 
 impl GoogleProvider {
@@ -64,45 +74,23 @@ impl GoogleProvider {
     /// Returns error if the provider metadata cannot be fetched or if the
     /// configuration is invalid
     pub async fn new(config: &ProviderConfig) -> Result<Self, OAuthError> {
-        // Fetch Google's OpenID Connect discovery document
-        let issuer = IssuerUrl::new("https://accounts.google.com".to_string())
-            .map_err(|e| OAuthError::Generic(format!("Invalid issuer URL: {e}")))?;
-
-        let provider_metadata = CoreProviderMetadata::discover_async(issuer, async_http_client)
-            .await
-            .map_err(|e| OAuthError::Generic(format!("Failed to discover provider: {e}")))?;
-
-        // Create OpenID Connect client
-        let openid_client = CoreClient::from_provider_metadata(
-            provider_metadata,
-            ClientId::new(config.client_id.clone()),
-            Some(ClientSecret::new(config.client_secret.clone())),
-        )
-        .set_redirect_uri(
-            RedirectUrl::new(config.redirect_uri.clone())
-                .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-        );
-
-        // Create basic OAuth2 client for token exchange
-        let client = BasicClient::new(
-            ClientId::new(config.client_id.clone()),
-            Some(ClientSecret::new(config.client_secret.clone())),
-            AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string())
-                .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
-            Some(
+        // Create basic OAuth2 client for token exchange (oauth2 5.0 API)
+        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
+            .set_client_secret(ClientSecret::new(config.client_secret.clone()))
+            .set_auth_uri(
+                AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string())
+                    .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
+            )
+            .set_token_uri(
                 TokenUrl::new("https://oauth2.googleapis.com/token".to_string())
                     .map_err(|e| OAuthError::Generic(format!("Invalid token URL: {e}")))?,
-            ),
-        )
-        .set_redirect_uri(
-            RedirectUrl::new(config.redirect_uri.clone())
-                .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-        );
+            )
+            .set_redirect_uri(
+                RedirectUrl::new(config.redirect_uri.clone())
+                    .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
+            );
 
-        Ok(Self {
-            client,
-            openid_client,
-        })
+        Ok(Self { client })
     }
 
     /// Generate authorization URL and CSRF state
@@ -142,7 +130,7 @@ impl GoogleProvider {
             .client
             .exchange_code(AuthorizationCode::new(code.to_string()))
             .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.to_string()))
-            .request_async(async_http_client)
+            .request_async(&async_http_client)
             .await
             .map_err(|e| OAuthError::TokenExchangeFailed(e.to_string()))?;
 

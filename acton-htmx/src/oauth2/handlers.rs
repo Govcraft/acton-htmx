@@ -17,7 +17,7 @@ use sqlx::PgPool;
 use crate::{
     auth::Session,
     error::ActonHtmxError,
-    htmx::{HxRedirect, HxTrigger},
+    htmx::{HxRedirect, HxResponseTrigger},
     oauth2::{
         agent::{GenerateState, ValidateState, RemoveState},
         models::OAuthAccount,
@@ -74,7 +74,7 @@ pub async fn initiate_oauth(
         .map_err(|e| ActonHtmxError::ServerError(format!("Failed to generate state: {e}")))?;
 
     // Generate authorization URL and PKCE verifier
-    let (auth_url, csrf_state, pkce_verifier) = match provider {
+    let (auth_url, _csrf_state, pkce_verifier) = match provider {
         OAuthProvider::Google => {
             let google = GoogleProvider::new(provider_config)
                 .await
@@ -159,7 +159,7 @@ pub async fn handle_oauth_callback(
     // Validate state with OAuth2 agent
     let (validate_msg, validate_rx) = ValidateState::new(params.state.clone());
     state.oauth2_agent().send(validate_msg).await;
-    let oauth_state = validate_rx
+    let _oauth_state = validate_rx
         .await
         .map_err(|e| ActonHtmxError::ServerError(format!("Failed to validate state: {e}")))?
         .ok_or_else(|| ActonHtmxError::Forbidden("Invalid or expired OAuth2 state".to_string()))?;
@@ -258,9 +258,9 @@ pub async fn handle_oauth_callback(
 
     // Authenticate user
     session.set("user_id".to_string(), &user_id)?;
-    session.remove("oauth2_state".to_string());
-    session.remove("oauth2_pkce_verifier".to_string());
-    session.remove("oauth2_provider".to_string());
+    session.remove("oauth2_state");
+    session.remove("oauth2_pkce_verifier");
+    session.remove("oauth2_provider");
 
     tracing::info!(
         provider = %provider_name,
@@ -274,7 +274,7 @@ pub async fn handle_oauth_callback(
         .unwrap_or_else(|| "/dashboard".to_string());
     session.remove("return_url");
 
-    Ok(HxRedirect::to(&return_url))
+    Ok((HxRedirect(return_url), ()))
 }
 
 /// Unlink OAuth account
@@ -310,8 +310,9 @@ pub async fn unlink_oauth_account(
         );
 
         Ok((
-            HxTrigger::normal(vec!["oauth-account-unlinked".to_string()]),
-            HxRedirect::to("/settings/accounts"),
+            HxResponseTrigger::normal(vec!["oauth-account-unlinked"]),
+            HxRedirect("/settings/accounts".to_string()),
+            (),
         ))
     } else {
         Err(ActonHtmxError::NotFound(
