@@ -200,11 +200,12 @@ impl GitHubProvider {
             .or_else(|| emails.iter().find(|e| e.verified))
             .or_else(|| emails.first());
 
-        let email = primary_email
-            .map(|e| e.email.clone())
-            .unwrap_or_else(|| format!("{}@users.noreply.github.com", github_user.id));
+        let email = primary_email.map_or_else(
+            || format!("{}@users.noreply.github.com", github_user.id),
+            |e| e.email.clone(),
+        );
 
-        let email_verified = primary_email.map_or(false, |e| e.verified);
+        let email_verified = primary_email.is_some_and(|e| e.verified);
 
         Ok(OAuthUserInfo {
             provider_user_id: github_user.id.to_string(),

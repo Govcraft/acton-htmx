@@ -137,16 +137,16 @@ impl OAuth2Agent {
 
                 // Validate state token
                 let state = agent.model.states.get(&token).and_then(|state| {
-                    if !state.is_expired() {
+                    if state.is_expired() {
+                        tracing::warn!(token = %token, "OAuth2 state token expired");
+                        None
+                    } else {
                         tracing::debug!(
                             token = %token,
                             provider = ?state.provider,
                             "Validated OAuth2 state token"
                         );
                         Some(state.clone())
-                    } else {
-                        tracing::warn!(token = %token, "OAuth2 state token expired");
-                        None
                     }
                 });
 

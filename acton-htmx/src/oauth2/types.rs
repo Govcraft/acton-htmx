@@ -4,6 +4,7 @@
 //! including provider configurations, tokens, and user information.
 
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 /// OAuth2 provider identifier
@@ -21,20 +22,19 @@ pub enum OAuthProvider {
 impl OAuthProvider {
     /// Get the provider as a string (lowercase)
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Google => "google",
             Self::GitHub => "github",
             Self::Oidc => "oidc",
         }
     }
+}
 
-    /// Parse provider from string
-    ///
-    /// # Errors
-    ///
-    /// Returns error if the provider name is not recognized
-    pub fn from_str(s: &str) -> Result<Self, OAuthError> {
+impl FromStr for OAuthProvider {
+    type Err = OAuthError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "google" => Ok(Self::Google),
             "github" => Ok(Self::GitHub),
@@ -83,7 +83,7 @@ pub struct OAuthConfig {
 impl OAuthConfig {
     /// Create a new empty OAuth2 configuration
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             google: None,
             github: None,
@@ -115,7 +115,7 @@ impl OAuthConfig {
 
     /// Check if a provider is configured
     #[must_use]
-    pub fn is_provider_configured(&self, provider: OAuthProvider) -> bool {
+    pub const fn is_provider_configured(&self, provider: OAuthProvider) -> bool {
         match provider {
             OAuthProvider::Google => self.google.is_some(),
             OAuthProvider::GitHub => self.github.is_some(),
@@ -188,7 +188,7 @@ impl OAuthToken {
     #[must_use]
     pub fn is_expired(&self) -> bool {
         self.expires_at
-            .map_or(false, |expires| SystemTime::now() > expires)
+            .is_some_and(|expires| SystemTime::now() > expires)
     }
 }
 
@@ -259,22 +259,22 @@ mod tests {
     #[test]
     fn test_provider_from_str() {
         assert_eq!(
-            OAuthProvider::from_str("google").unwrap(),
+            "google".parse::<OAuthProvider>().unwrap(),
             OAuthProvider::Google
         );
         assert_eq!(
-            OAuthProvider::from_str("GOOGLE").unwrap(),
+            "GOOGLE".parse::<OAuthProvider>().unwrap(),
             OAuthProvider::Google
         );
         assert_eq!(
-            OAuthProvider::from_str("github").unwrap(),
+            "github".parse::<OAuthProvider>().unwrap(),
             OAuthProvider::GitHub
         );
         assert_eq!(
-            OAuthProvider::from_str("oidc").unwrap(),
+            "oidc".parse::<OAuthProvider>().unwrap(),
             OAuthProvider::Oidc
         );
-        assert!(OAuthProvider::from_str("invalid").is_err());
+        assert!("invalid".parse::<OAuthProvider>().is_err());
     }
 
     #[test]

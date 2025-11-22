@@ -22,7 +22,7 @@ use crate::{
         agent::{GenerateState, ValidateState, RemoveState},
         models::OAuthAccount,
         providers::{GitHubProvider, GoogleProvider, OidcProvider},
-        types::OAuthProvider,
+        types::{OAuthProvider, OAuthUserInfo, ProviderConfig},
     },
     state::ActonHtmxState,
 };
@@ -56,7 +56,7 @@ pub async fn initiate_oauth(
     mut session: Session,
 ) -> Result<impl IntoResponse, ActonHtmxError> {
     // Parse provider
-    let provider = OAuthProvider::from_str(&provider_name)
+    let provider = provider_name.parse::<OAuthProvider>()
         .map_err(|_| ActonHtmxError::BadRequest(format!("Unknown provider: {provider_name}")))?;
 
     // Get OAuth2 config
@@ -77,7 +77,6 @@ pub async fn initiate_oauth(
     let (auth_url, _csrf_state, pkce_verifier) = match provider {
         OAuthProvider::Google => {
             let google = GoogleProvider::new(provider_config)
-                .await
                 .map_err(|e| ActonHtmxError::ServerError(format!("Google OAuth error: {e}")))?;
             google.authorization_url()
         }
@@ -101,6 +100,153 @@ pub async fn initiate_oauth(
 
     // Redirect to provider's authorization endpoint
     Ok(Redirect::to(&auth_url))
+}
+
+/// Validate CSRF state token from session and OAuth2 agent
+///
+/// # Errors
+///
+/// Returns error if state token is missing, mismatched, or expired
+async fn validate_oauth_state(
+    state: &ActonHtmxState,
+    session: &Session,
+    params: &OAuthCallback,
+    provider_name: &str,
+) -> Result<(), ActonHtmxError> {
+    // Validate CSRF state token from session
+    let stored_state: String = session
+        .get("oauth2_state")
+        .ok_or_else(|| ActonHtmxError::BadRequest("No OAuth2 state in session".to_string()))?;
+
+    if stored_state != params.state {
+        tracing::warn!(
+            provider = %provider_name,
+            expected = %stored_state,
+            received = %params.state,
+            "OAuth2 state mismatch (potential CSRF attack)"
+        );
+        return Err(ActonHtmxError::Forbidden(
+            "OAuth2 state mismatch".to_string(),
+        ));
+    }
+
+    // Validate state with OAuth2 agent
+    let (validate_msg, validate_rx) = ValidateState::new(params.state.clone());
+    state.oauth2_agent().send(validate_msg).await;
+    validate_rx
+        .await
+        .map_err(|e| ActonHtmxError::ServerError(format!("Failed to validate state: {e}")))?
+        .ok_or_else(|| ActonHtmxError::Forbidden("Invalid or expired OAuth2 state".to_string()))?;
+
+    // Remove state token (one-time use)
+    state
+        .oauth2_agent()
+        .send(RemoveState {
+            token: params.state.clone(),
+        })
+        .await;
+
+    Ok(())
+}
+
+/// Exchange authorization code for access token and fetch user info
+///
+/// # Errors
+///
+/// Returns error if token exchange or user info fetch fails
+async fn exchange_code_and_fetch_user(
+    provider: OAuthProvider,
+    provider_config: &ProviderConfig,
+    code: &str,
+    pkce_verifier: &str,
+) -> Result<OAuthUserInfo, ActonHtmxError> {
+    match provider {
+        OAuthProvider::Google => {
+            let google = GoogleProvider::new(provider_config)
+                .map_err(|e| ActonHtmxError::ServerError(format!("Google OAuth error: {e}")))?;
+
+            let token = google
+                .exchange_code(code, pkce_verifier)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("Token exchange failed: {e}")))?;
+
+            google
+                .fetch_user_info(&token.access_token)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("Failed to fetch user info: {e}")))
+        }
+        OAuthProvider::GitHub => {
+            let github = GitHubProvider::new(provider_config)
+                .map_err(|e| ActonHtmxError::ServerError(format!("GitHub OAuth error: {e}")))?;
+
+            let token = github
+                .exchange_code(code, pkce_verifier)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("Token exchange failed: {e}")))?;
+
+            github
+                .fetch_user_info(&token.access_token)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("Failed to fetch user info: {e}")))
+        }
+        OAuthProvider::Oidc => {
+            let oidc = OidcProvider::new(provider_config)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("OIDC error: {e}")))?;
+
+            let token = oidc
+                .exchange_code(code, pkce_verifier)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("Token exchange failed: {e}")))?;
+
+            oidc
+                .fetch_user_info(&token.access_token)
+                .await
+                .map_err(|e| ActonHtmxError::ServerError(format!("Failed to fetch user info: {e}")))
+        }
+    }
+}
+
+/// Find or create OAuth account and return user ID
+///
+/// # Errors
+///
+/// Returns error if database operations fail
+async fn find_or_create_oauth_user(
+    pool: &PgPool,
+    session: &Session,
+    provider: OAuthProvider,
+    user_info: &OAuthUserInfo,
+) -> Result<i64, ActonHtmxError> {
+    let oauth_account =
+        OAuthAccount::find_by_provider(pool, provider, &user_info.provider_user_id).await?;
+
+    if let Some(mut account) = oauth_account {
+        // Existing OAuth account - update info and use existing user_id
+        account.update_info(pool, user_info).await?;
+        Ok(account.user_id)
+    } else if let Some(user_id) = session.get::<i64>("user_id") {
+        // Link to existing authenticated user
+        let account = OAuthAccount::link_account(pool, user_id, provider, user_info).await?;
+        Ok(account.user_id)
+    } else {
+        // Create new user for this OAuth account
+        let user_id = create_user_from_oauth(pool, &user_info.email).await?;
+        let account = OAuthAccount::link_account(pool, user_id, provider, user_info).await?;
+        Ok(account.user_id)
+    }
+}
+
+/// Complete OAuth authentication by updating session
+fn complete_oauth_authentication(
+    session: &mut Session,
+    user_id: i64,
+) -> Result<(), ActonHtmxError> {
+    session.set("user_id".to_string(), user_id)?;
+    session.remove("oauth2_state");
+    session.remove("oauth2_pkce_verifier");
+    session.remove("oauth2_provider");
+    Ok(())
 }
 
 /// Handle OAuth2 callback
@@ -136,41 +282,11 @@ pub async fn handle_oauth_callback(
     }
 
     // Parse provider
-    let provider = OAuthProvider::from_str(&provider_name)
+    let provider = provider_name.parse::<OAuthProvider>()
         .map_err(|_| ActonHtmxError::BadRequest(format!("Unknown provider: {provider_name}")))?;
 
     // Validate CSRF state token
-    let stored_state: String = session
-        .get("oauth2_state")
-        .ok_or_else(|| ActonHtmxError::BadRequest("No OAuth2 state in session".to_string()))?;
-
-    if stored_state != params.state {
-        tracing::warn!(
-            provider = %provider_name,
-            expected = %stored_state,
-            received = %params.state,
-            "OAuth2 state mismatch (potential CSRF attack)"
-        );
-        return Err(ActonHtmxError::Forbidden(
-            "OAuth2 state mismatch".to_string(),
-        ));
-    }
-
-    // Validate state with OAuth2 agent
-    let (validate_msg, validate_rx) = ValidateState::new(params.state.clone());
-    state.oauth2_agent().send(validate_msg).await;
-    let _oauth_state = validate_rx
-        .await
-        .map_err(|e| ActonHtmxError::ServerError(format!("Failed to validate state: {e}")))?
-        .ok_or_else(|| ActonHtmxError::Forbidden("Invalid or expired OAuth2 state".to_string()))?;
-
-    // Remove state token (one-time use)
-    state
-        .oauth2_agent()
-        .send(RemoveState {
-            token: params.state.clone(),
-        })
-        .await;
+    validate_oauth_state(&state, &session, &params, &provider_name).await?;
 
     // Get PKCE verifier from session
     let pkce_verifier: String = session
@@ -178,89 +294,25 @@ pub async fn handle_oauth_callback(
         .ok_or_else(|| ActonHtmxError::BadRequest("No PKCE verifier in session".to_string()))?;
 
     // Get OAuth2 config
-    let oauth_config = &state.config().oauth2;
-
-    let provider_config = oauth_config
+    let provider_config = state.config().oauth2
         .get_provider(provider)
         .map_err(|e| ActonHtmxError::ServerError(format!("Provider not configured: {e}")))?;
 
     // Exchange code for token and fetch user info
-    let user_info = match provider {
-        OAuthProvider::Google => {
-            let google = GoogleProvider::new(provider_config)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Google OAuth error: {e}")))?;
-
-            let token = google
-                .exchange_code(&params.code, &pkce_verifier)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Token exchange failed: {e}")))?;
-
-            google
-                .fetch_user_info(&token.access_token)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Failed to fetch user info: {e}")))?
-        }
-        OAuthProvider::GitHub => {
-            let github = GitHubProvider::new(provider_config)
-                .map_err(|e| ActonHtmxError::ServerError(format!("GitHub OAuth error: {e}")))?;
-
-            let token = github
-                .exchange_code(&params.code, &pkce_verifier)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Token exchange failed: {e}")))?;
-
-            github
-                .fetch_user_info(&token.access_token)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Failed to fetch user info: {e}")))?
-        }
-        OAuthProvider::Oidc => {
-            let oidc = OidcProvider::new(provider_config)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("OIDC error: {e}")))?;
-
-            let token = oidc
-                .exchange_code(&params.code, &pkce_verifier)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Token exchange failed: {e}")))?;
-
-            oidc
-                .fetch_user_info(&token.access_token)
-                .await
-                .map_err(|e| ActonHtmxError::ServerError(format!("Failed to fetch user info: {e}")))?
-        }
-    };
+    let user_info = exchange_code_and_fetch_user(
+        provider,
+        provider_config,
+        &params.code,
+        &pkce_verifier,
+    )
+    .await?;
 
     // Find or create OAuth account
     let pool = state.database_pool();
-    let oauth_account =
-        OAuthAccount::find_by_provider(pool, provider, &user_info.provider_user_id).await?;
-
-    let user_id = if let Some(account) = oauth_account {
-        // Existing OAuth account - update info and use existing user_id
-        let mut account = account;
-        account.update_info(pool, &user_info).await?;
-        account.user_id
-    } else {
-        // New OAuth account - check if user is already authenticated
-        if let Some(user_id) = session.get::<i64>("user_id") {
-            // Link to existing authenticated user
-            let account = OAuthAccount::link_account(pool, user_id, provider, &user_info).await?;
-            account.user_id
-        } else {
-            // Create new user for this OAuth account
-            let user_id = create_user_from_oauth(pool, &user_info.email).await?;
-            let account = OAuthAccount::link_account(pool, user_id, provider, &user_info).await?;
-            account.user_id
-        }
-    };
+    let user_id = find_or_create_oauth_user(pool, &session, provider, &user_info).await?;
 
     // Authenticate user
-    session.set("user_id".to_string(), &user_id)?;
-    session.remove("oauth2_state");
-    session.remove("oauth2_pkce_verifier");
-    session.remove("oauth2_provider");
+    complete_oauth_authentication(&mut session, user_id)?;
 
     tracing::info!(
         provider = %provider_name,
@@ -295,7 +347,7 @@ pub async fn unlink_oauth_account(
         .ok_or_else(|| ActonHtmxError::Unauthorized("Not authenticated".to_string()))?;
 
     // Parse provider
-    let provider = OAuthProvider::from_str(&provider_name)
+    let provider = provider_name.parse::<OAuthProvider>()
         .map_err(|_| ActonHtmxError::BadRequest(format!("Unknown provider: {provider_name}")))?;
 
     // Unlink account

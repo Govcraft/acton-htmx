@@ -244,6 +244,10 @@ impl ActonHtmxState {
 
     /// Get the database connection pool
     ///
+    /// # Panics
+    ///
+    /// Panics if the database pool has not been initialized via `set_database_pool`.
+    ///
     /// # Example
     ///
     /// ```rust,ignore

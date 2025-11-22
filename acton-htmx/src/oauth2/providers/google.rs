@@ -73,7 +73,7 @@ impl GoogleProvider {
     ///
     /// Returns error if the provider metadata cannot be fetched or if the
     /// configuration is invalid
-    pub async fn new(config: &ProviderConfig) -> Result<Self, OAuthError> {
+    pub fn new(config: &ProviderConfig) -> Result<Self, OAuthError> {
         // Create basic OAuth2 client for token exchange (oauth2 5.0 API)
         let client = BasicClient::new(ClientId::new(config.client_id.clone()))
             .set_client_secret(ClientSecret::new(config.client_secret.clone()))
@@ -216,7 +216,7 @@ mod tests {
         // Note: This will make a network request to Google's discovery endpoint
         // In production, you might want to mock this
         tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let provider = GoogleProvider::new(&config).await;
+            let provider = GoogleProvider::new(&config);
             // Skip test if network is unavailable
             if provider.is_err() {
                 return;

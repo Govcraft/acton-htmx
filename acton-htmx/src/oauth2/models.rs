@@ -199,7 +199,7 @@ impl TryFrom<String> for OAuthProvider {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::from_str(&value).map_err(|e| e.to_string())
+        value.parse().map_err(|e: super::types::OAuthError| e.to_string())
     }
 }
 
