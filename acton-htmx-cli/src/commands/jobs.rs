@@ -70,28 +70,42 @@ impl JobsCommand {
     /// - Invalid job ID provided
     pub fn execute(&self) -> Result<()> {
         match self {
-            Self::List { status, limit } => self.list(status.as_deref(), *limit),
-            Self::Stats => self.stats(),
-            Self::Retry { job_id } => self.retry(job_id),
-            Self::RetryAll { force } => self.retry_all(*force),
-            Self::Cancel { job_id } => self.cancel(job_id),
-            Self::ClearDeadLetter { force } => self.clear_dead_letter(*force),
-            Self::Watch { interval } => self.watch(*interval),
+            Self::List { status, limit } => {
+                Self::list(status.as_deref(), *limit);
+                Ok(())
+            }
+            Self::Stats => {
+                Self::stats();
+                Ok(())
+            }
+            Self::Retry { job_id } => {
+                Self::retry(job_id);
+                Ok(())
+            }
+            Self::RetryAll { force } => Self::retry_all(*force),
+            Self::Cancel { job_id } => {
+                Self::cancel(job_id);
+                Ok(())
+            }
+            Self::ClearDeadLetter { force } => Self::clear_dead_letter(*force),
+            Self::Watch { interval } => {
+                Self::watch(*interval);
+                Ok(())
+            }
         }
     }
 
-    fn list(&self, status: Option<&str>, limit: usize) -> Result<()> {
-        println!("\n{} Job Queue", INFO);
+    fn list(status: Option<&str>, limit: usize) {
+        println!("\n{INFO} Job Queue");
         println!();
 
         // TODO: Connect to job service via HTTP API or direct agent connection
         // For now, show placeholder
 
-        let header = if let Some(status) = status {
-            format!("Showing {} jobs with status: {}", limit, style(status).cyan())
-        } else {
-            format!("Showing last {} jobs", limit)
-        };
+        let header = status.map_or_else(
+            || format!("Showing last {limit} jobs"),
+            |status| format!("Showing {limit} jobs with status: {}", style(status).cyan()),
+        );
 
         println!("{}", style(header).bold());
         println!("{}", "─".repeat(80));
@@ -106,20 +120,10 @@ impl JobsCommand {
         // TODO: Fetch and display actual jobs
         println!("  {}", style("(No jobs to display)").dim());
         println!();
-        println!(
-            "{} To enable job management, ensure your application is running with job agent enabled.",
-            INFO
-        );
-
-        Ok(())
+        println!("{INFO} To enable job management, ensure your application is running with job agent enabled.");
     }
 
-    fn stats(&self) -> Result<()> {
-        println!("\n{} Job Statistics", INFO);
-        println!();
-
-        // TODO: Fetch actual stats from job service
-
+    fn stats() {
         #[derive(Deserialize)]
         struct JobStats {
             total_enqueued: u64,
@@ -131,6 +135,11 @@ impl JobsCommand {
             p95_execution_ms: f64,
             success_rate: f64,
         }
+
+        println!("\n{INFO} Job Statistics");
+        println!();
+
+        // TODO: Fetch actual stats from job service
 
         // Placeholder stats
         let stats = JobStats {
@@ -166,22 +175,18 @@ impl JobsCommand {
             style(format!("{:.1}", stats.success_rate)).green()
         );
         println!();
-
-        Ok(())
     }
 
-    fn retry(&self, job_id: &str) -> Result<()> {
-        println!("{} Retrying job: {}", INFO, style(job_id).cyan());
+    fn retry(job_id: &str) {
+        println!("{INFO} Retrying job: {}", style(job_id).cyan());
 
         // TODO: Call job service to retry job
         println!("  {}", style("(Job service not connected)").dim());
         println!();
-        println!("{} Job retry queued successfully", SUCCESS);
-
-        Ok(())
+        println!("{SUCCESS} Job retry queued successfully");
     }
 
-    fn retry_all(&self, force: bool) -> Result<()> {
+    fn retry_all(force: bool) -> Result<()> {
         if !force {
             println!("{} This will retry ALL failed jobs.", style("Warning:").yellow());
             println!("Are you sure? (y/N): ");
@@ -197,32 +202,27 @@ impl JobsCommand {
             }
         }
 
-        println!("{} Retrying all failed jobs...", INFO);
+        println!("{INFO} Retrying all failed jobs...");
 
         // TODO: Call job service to retry all failed jobs
         println!("  {}", style("(Job service not connected)").dim());
         println!();
-        println!("{} All failed jobs queued for retry", SUCCESS);
+        println!("{SUCCESS} All failed jobs queued for retry");
 
         Ok(())
     }
 
-    fn cancel(&self, job_id: &str) -> Result<()> {
-        println!("{} Cancelling job: {}", INFO, style(job_id).cyan());
+    fn cancel(job_id: &str) {
+        println!("{INFO} Cancelling job: {}", style(job_id).cyan());
 
         // TODO: Call job service to cancel job
         println!("  {}", style("(Job service not connected)").dim());
         println!();
-        println!("{} Job cancellation requested", SUCCESS);
-        println!(
-            "  {} Graceful shutdown in progress. Job will stop at next checkpoint.",
-            INFO
-        );
-
-        Ok(())
+        println!("{SUCCESS} Job cancellation requested");
+        println!("  {INFO} Graceful shutdown in progress. Job will stop at next checkpoint.");
     }
 
-    fn clear_dead_letter(&self, force: bool) -> Result<()> {
+    fn clear_dead_letter(force: bool) -> Result<()> {
         if !force {
             println!(
                 "{} This will permanently delete all jobs in the dead letter queue.",
@@ -241,29 +241,29 @@ impl JobsCommand {
             }
         }
 
-        println!("{} Clearing dead letter queue...", INFO);
+        println!("{INFO} Clearing dead letter queue...");
 
         // TODO: Call job service to clear DLQ
         println!("  {}", style("(Job service not connected)").dim());
         println!();
-        println!("{} Dead letter queue cleared", SUCCESS);
+        println!("{SUCCESS} Dead letter queue cleared");
 
         Ok(())
     }
 
-    fn watch(&self, interval: u64) -> Result<()> {
+    fn watch(interval: u64) {
         use std::io::Write;
         use std::thread;
         use std::time::Duration;
 
-        println!("{} Watching job queue (Ctrl+C to stop)", INFO);
-        println!("  Update interval: {} seconds", interval);
+        println!("{INFO} Watching job queue (Ctrl+C to stop)");
+        println!("  Update interval: {interval} seconds");
         println!();
 
         loop {
             // Clear screen
             print!("\x1B[2J\x1B[1;1H");
-            std::io::stdout().flush()?;
+            let _ = std::io::stdout().flush();
 
             // Print header
             println!("{}", style("Job Queue Monitor").bold().cyan());

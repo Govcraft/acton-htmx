@@ -19,16 +19,16 @@ pub enum GenerateCommand {
     /// Generate a new background job
     ///
     /// Examples:
-    ///   acton-htmx generate job WelcomeEmail user_id:i64 email:string
-    ///   acton-htmx generate job GenerateReport report_id:i64 --priority=high
-    ///   acton-htmx generate job CleanupOldData days:u32 --timeout=600
+    ///   acton-htmx generate job `WelcomeEmail` `user_id:i64` `email:string`
+    ///   acton-htmx generate job `GenerateReport` `report_id:i64` --priority=high
+    ///   acton-htmx generate job `CleanupOldData` `days:u32` --timeout=600
     Job {
-        /// Job name (PascalCase, will be suffixed with 'Job')
+        /// Job name (`PascalCase`, will be suffixed with `Job`)
         name: String,
 
-        /// Job fields in format: name:type
-        /// Supported types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64,
-        /// bool, string, vec_string, option_string, etc.
+        /// Job fields in format: `name:type`
+        /// Supported types: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`,
+        /// `bool`, `string`, `vec_string`, `option_string`, etc.
         #[arg(value_name = "FIELD:TYPE")]
         fields: Vec<String>,
 
@@ -69,14 +69,13 @@ impl GenerateCommand {
                 priority,
                 output,
             } => {
-                self.generate_job(name, fields, *max_retries, *timeout, *priority, output)
+                Self::generate_job(name, fields, *max_retries, *timeout, *priority, output)
             }
         }
     }
 
     #[allow(clippy::too_many_arguments)]
     fn generate_job(
-        &self,
         name: &str,
         fields: &[String],
         max_retries: u32,
@@ -95,7 +94,7 @@ impl GenerateCommand {
         let job_name_snake = job_name.to_case(Case::Snake);
 
         // Parse fields
-        let parsed_fields = self.parse_fields(fields)?;
+        let parsed_fields = Self::parse_fields(fields)?;
 
         // Check if we need database or email dependencies
         let needs_db = parsed_fields
@@ -169,21 +168,21 @@ impl GenerateCommand {
         Ok(())
     }
 
-    fn parse_fields(&self, fields: &[String]) -> Result<Vec<FieldDefinition>> {
-        fields.iter().map(|f| self.parse_field(f)).collect()
+    fn parse_fields(fields: &[String]) -> Result<Vec<FieldDefinition>> {
+        fields.iter().map(|f| Self::parse_field(f)).collect()
     }
 
-    fn parse_field(&self, field: &str) -> Result<FieldDefinition> {
+    fn parse_field(field: &str) -> Result<FieldDefinition> {
         let parts: Vec<&str> = field.split(':').collect();
 
         if parts.len() != 2 {
-            bail!("Invalid field format: '{}'. Expected 'name:type'", field);
+            bail!("Invalid field format: '{field}'. Expected 'name:type'");
         }
 
         let name = parts[0].to_case(Case::Snake);
         let type_str = parts[1];
 
-        let (rust_type, test_value) = self.map_type(type_str)?;
+        let (rust_type, test_value) = Self::map_type(type_str)?;
 
         Ok(FieldDefinition {
             name,
@@ -193,7 +192,7 @@ impl GenerateCommand {
         })
     }
 
-    fn map_type(&self, type_str: &str) -> Result<(String, String)> {
+    fn map_type(type_str: &str) -> Result<(String, String)> {
         let (rust_type, test_value) = match type_str.to_lowercase().as_str() {
             "i8" => ("i8", "0_i8"),
             "i16" => ("i16", "0_i16"),
@@ -210,7 +209,7 @@ impl GenerateCommand {
             "vec_string" | "vec<string>" => ("Vec<String>", "vec![]"),
             "option_string" | "option<string>" => ("Option<String>", "None"),
             "option_i64" | "option<i64>" => ("Option<i64>", "None"),
-            _ => bail!("Unsupported type: '{}'. Supported types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string, vec_string, option_string, option_i64", type_str),
+            _ => bail!("Unsupported type: '{type_str}'. Supported types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string, vec_string, option_string, option_i64"),
         };
 
         Ok((rust_type.to_string(), test_value.to_string()))
@@ -232,16 +231,7 @@ mod tests {
 
     #[test]
     fn test_parse_field_i64() {
-        let gen = GenerateCommand::Job {
-            name: "Test".to_string(),
-            fields: vec![],
-            max_retries: 3,
-            timeout: 300,
-            priority: 128,
-            output: PathBuf::from("src/jobs"),
-        };
-
-        let field = gen.parse_field("user_id:i64").unwrap();
+        let field = GenerateCommand::parse_field("user_id:i64").unwrap();
         assert_eq!(field.name, "user_id");
         assert_eq!(field.rust_type, "i64");
         assert_eq!(field.test_value, "0_i64");
@@ -249,16 +239,7 @@ mod tests {
 
     #[test]
     fn test_parse_field_string() {
-        let gen = GenerateCommand::Job {
-            name: "Test".to_string(),
-            fields: vec![],
-            max_retries: 3,
-            timeout: 300,
-            priority: 128,
-            output: PathBuf::from("src/jobs"),
-        };
-
-        let field = gen.parse_field("email:string").unwrap();
+        let field = GenerateCommand::parse_field("email:string").unwrap();
         assert_eq!(field.name, "email");
         assert_eq!(field.rust_type, "String");
         assert_eq!(field.test_value, r#"String::from("test")"#);
@@ -266,31 +247,13 @@ mod tests {
 
     #[test]
     fn test_parse_field_invalid_format() {
-        let gen = GenerateCommand::Job {
-            name: "Test".to_string(),
-            fields: vec![],
-            max_retries: 3,
-            timeout: 300,
-            priority: 128,
-            output: PathBuf::from("src/jobs"),
-        };
-
-        let result = gen.parse_field("invalid");
+        let result = GenerateCommand::parse_field("invalid");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_map_type_unsupported() {
-        let gen = GenerateCommand::Job {
-            name: "Test".to_string(),
-            fields: vec![],
-            max_retries: 3,
-            timeout: 300,
-            priority: 128,
-            output: PathBuf::from("src/jobs"),
-        };
-
-        let result = gen.map_type("unsupported");
+        let result = GenerateCommand::map_type("unsupported");
         assert!(result.is_err());
     }
 }
