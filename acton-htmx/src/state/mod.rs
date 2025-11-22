@@ -4,11 +4,15 @@
 //! HTMX-specific components.
 
 use crate::agents::{CsrfManagerAgent, SessionManagerAgent};
+use crate::jobs::JobAgent;
 use crate::oauth2::OAuth2Agent;
 use crate::{config::ActonHtmxConfig, observability::ObservabilityConfig};
 use acton_reactive::prelude::{AgentHandle, AgentRuntime};
 use sqlx::PgPool;
 use std::sync::Arc;
+
+#[cfg(feature = "redis")]
+use deadpool_redis::Pool as RedisPool;
 
 /// Application state for acton-htmx applications
 ///
@@ -17,10 +21,12 @@ use std::sync::Arc;
 /// - Observability (from acton-service)
 /// - Session management agent (from acton-reactive)
 /// - CSRF protection agent (from acton-reactive)
-/// - Database pools (from acton-service) - TODO
-/// - Redis cache (from acton-service) - TODO
-/// - Additional agents (jobs) - TODO
-/// - Template registry - TODO
+/// - OAuth2 manager agent (from acton-reactive)
+/// - Job processing agent (from acton-reactive)
+/// - Database connection pool (PostgreSQL via SQLx)
+/// - Redis cache (optional, for distributed sessions and job persistence)
+///
+/// Note: Askama compiles templates at build time, so no runtime template registry is needed.
 ///
 /// # Example
 ///
@@ -71,10 +77,21 @@ pub struct ActonHtmxState {
     /// Clone this freely - `AgentHandle` is designed for concurrent access
     oauth2_manager: AgentHandle,
 
+    /// Job processing agent handle
+    ///
+    /// Clone this freely - `AgentHandle` is designed for concurrent access
+    job_agent: AgentHandle,
+
     /// Database connection pool
     ///
     /// Shared across all requests for efficient connection management
     database_pool: Option<Arc<PgPool>>,
+
+    /// Redis connection pool (optional)
+    ///
+    /// Used for distributed sessions and job persistence when enabled
+    #[cfg(feature = "redis")]
+    redis_pool: Option<RedisPool>,
 }
 
 impl ActonHtmxState {
@@ -106,6 +123,7 @@ impl ActonHtmxState {
         let session_manager = SessionManagerAgent::spawn(runtime).await?;
         let csrf_manager = CsrfManagerAgent::spawn(runtime).await?;
         let oauth2_manager = OAuth2Agent::spawn(runtime).await?;
+        let job_agent = JobAgent::spawn(runtime).await?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -113,7 +131,10 @@ impl ActonHtmxState {
             session_manager,
             csrf_manager,
             oauth2_manager,
+            job_agent,
             database_pool: None,
+            #[cfg(feature = "redis")]
+            redis_pool: None,
         })
     }
 
@@ -146,6 +167,7 @@ impl ActonHtmxState {
         let session_manager = SessionManagerAgent::spawn(runtime).await?;
         let csrf_manager = CsrfManagerAgent::spawn(runtime).await?;
         let oauth2_manager = OAuth2Agent::spawn(runtime).await?;
+        let job_agent = JobAgent::spawn(runtime).await?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -153,7 +175,10 @@ impl ActonHtmxState {
             session_manager,
             csrf_manager,
             oauth2_manager,
+            job_agent,
             database_pool: None,
+            #[cfg(feature = "redis")]
+            redis_pool: None,
         })
     }
 
@@ -242,6 +267,27 @@ impl ActonHtmxState {
         &self.oauth2_manager
     }
 
+    /// Get the job processing agent handle
+    ///
+    /// Use this to send job-related messages directly to the agent.
+    /// For most use cases, prefer using the job processing APIs in the `jobs` module.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use acton_htmx::jobs::{EnqueueJob, JobId};
+    ///
+    /// async fn handler(State(state): State<ActonHtmxState>) {
+    ///     let job_handle = state.job_agent();
+    ///     // Enqueue a job directly
+    ///     job_handle.send(EnqueueJob { /* ... */ }).await;
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn job_agent(&self) -> &AgentHandle {
+        &self.job_agent
+    }
+
     /// Get the database connection pool
     ///
     /// # Panics
@@ -275,6 +321,39 @@ impl ActonHtmxState {
     /// ```
     pub fn set_database_pool(&mut self, pool: PgPool) {
         self.database_pool = Some(Arc::new(pool));
+    }
+
+    /// Get the Redis connection pool (if configured)
+    ///
+    /// Returns `None` if Redis is not enabled or not configured.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// async fn handler(State(state): State<ActonHtmxState>) {
+    ///     if let Some(redis) = state.redis_pool() {
+    ///         let mut conn = redis.get().await?;
+    ///         // Use Redis connection
+    ///     }
+    /// }
+    /// ```
+    #[must_use]
+    #[cfg(feature = "redis")]
+    pub const fn redis_pool(&self) -> Option<&RedisPool> {
+        self.redis_pool.as_ref()
+    }
+
+    /// Set the Redis connection pool
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let redis_pool = RedisPool::new(/* config */)?;
+    /// state.set_redis_pool(redis_pool);
+    /// ```
+    #[cfg(feature = "redis")]
+    pub fn set_redis_pool(&mut self, pool: RedisPool) {
+        self.redis_pool = Some(pool);
     }
 }
 
