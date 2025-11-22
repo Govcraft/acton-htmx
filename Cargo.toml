@@ -2,7 +2,6 @@
 members = [
     "acton-htmx",
     "acton-htmx-cli",
-    "acton-htmx-macros",
 ]
 resolver = "2"
 

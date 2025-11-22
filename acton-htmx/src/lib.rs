@@ -86,11 +86,6 @@ pub mod agents;
 // Public middleware module (needed for session layer)
 pub mod middleware;
 
-// Internal modules (not re-exported, implementation details)
-mod cache;
-mod database;
-mod security;
-
 #[cfg(test)]
 pub mod testing;
 
@@ -184,8 +179,4 @@ pub mod prelude {
 
     // Convenience for JSON responses
     pub use serde_json::json;
-
-    // Macros from acton-htmx-macros crate
-    // TODO: Implement these macros
-    // pub use acton_htmx_macros::{AskamaForm, Policy, ModelBinding};
 }

@@ -88,6 +88,8 @@ impl From<JobId> for Uuid {
 ///     }
 /// }
 /// ```
+// Note: Job trait cannot use #[automock] due to associated type `Result`
+// without default value. Use manual mocks or concrete test implementations instead.
 #[async_trait]
 pub trait Job: Send + Sync + Serialize + for<'de> Deserialize<'de> + 'static {
     /// The result type returned by this job.

@@ -70,6 +70,7 @@ impl fmt::Display for ScanResult {
 ///
 /// This trait allows for multiple virus scanning backends (ClamAV, Windows Defender,
 /// cloud scanning services, etc.) with a consistent API.
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait VirusScanner: Send + Sync {
     /// Scans a file for viruses and malware

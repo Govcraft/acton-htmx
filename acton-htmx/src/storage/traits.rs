@@ -48,6 +48,7 @@ use async_trait::async_trait;
 /// # Ok(())
 /// # }
 /// ```
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait FileStorage: Send + Sync {
     /// Stores an uploaded file and returns metadata about the stored file

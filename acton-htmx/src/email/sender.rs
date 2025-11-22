@@ -28,6 +28,7 @@ use super::{Email, EmailError};
 /// # Ok(())
 /// # }
 /// ```
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait EmailSender: Send + Sync {
     /// Send an email
