@@ -43,9 +43,17 @@
 //! ```
 
 mod local;
+pub mod policy;
+pub mod processing;
+pub mod scanning;
 mod traits;
 mod types;
+pub mod validation;
 
 pub use local::LocalFileStorage;
+pub use policy::{PolicyBuilder, UploadPolicy};
+pub use processing::ImageProcessor;
+pub use scanning::{ClamAvScanner, NoOpScanner, QuarantineScanner, ScanResult, VirusScanner};
 pub use traits::FileStorage;
-pub use types::{StorageError, StoredFile, UploadedFile};
+pub use types::{StorageError, StorageResult, StoredFile, UploadedFile};
+pub use validation::MimeValidator;
