@@ -17,8 +17,10 @@
 //! # }
 //! ```
 
-use crate::auth::{EmailAddress, FlashMessage, Session, UserError};
+use crate::auth::{CreateUser, EmailAddress, FlashMessage, Session, User, UserError};
+use crate::state::ActonHtmxState;
 use axum::{
+    extract::State,
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     Form,
@@ -108,6 +110,7 @@ pub async fn login_form(
 /// let app = Router::new().route("/login", post(login_post));
 /// ```
 pub async fn login_post(
+    State(state): State<ActonHtmxState>,
     mut session: Session,
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AuthHandlerError> {
@@ -116,18 +119,16 @@ pub async fn login_post(
         .map_err(|e| AuthHandlerError::ValidationFailed(e.to_string()))?;
 
     // Parse email
-    let _email = EmailAddress::parse(&form.email)
+    let email = EmailAddress::parse(&form.email)
         .map_err(|_| AuthHandlerError::InvalidCredentials)?;
 
-    // TODO: Authenticate with database
-    // For now, this is a placeholder that will be completed when database is integrated
-    // let user = User::authenticate(&email, &form.password, &pool).await?;
-
-    // For demonstration, simulate successful login for any valid email
-    let user_id = 1; // Placeholder user ID
+    // Authenticate with database
+    let user = User::authenticate(&email, &form.password, state.database_pool())
+        .await
+        .map_err(|_| AuthHandlerError::InvalidCredentials)?;
 
     // Set user ID in session
-    session.set_user_id(Some(user_id));
+    session.set_user_id(Some(user.id));
 
     // Add success flash message
     session.add_flash(FlashMessage::success("Successfully logged in!"));
@@ -192,6 +193,7 @@ pub async fn register_form(
 /// let app = Router::new().route("/register", post(register_post));
 /// ```
 pub async fn register_post(
+    State(state): State<ActonHtmxState>,
     mut session: Session,
     Form(form): Form<RegisterForm>,
 ) -> Result<Response, AuthHandlerError> {
@@ -200,7 +202,7 @@ pub async fn register_post(
         .map_err(|e| AuthHandlerError::ValidationFailed(e.to_string()))?;
 
     // Parse email
-    let _email = EmailAddress::parse(&form.email)
+    let email = EmailAddress::parse(&form.email)
         .map_err(|_| AuthHandlerError::InvalidEmail)?;
 
     // Check password confirmation
@@ -208,19 +210,15 @@ pub async fn register_post(
         return Err(AuthHandlerError::PasswordMismatch);
     }
 
-    // TODO: Create user in database
-    // For now, this is a placeholder
-    // let create_user = CreateUser {
-    //     email,
-    //     password: form.password,
-    // };
-    // let user = User::create(create_user, &pool).await?;
-
-    // For demonstration, simulate successful registration
-    let user_id = 1; // Placeholder user ID
+    // Create user in database
+    let create_user = CreateUser {
+        email,
+        password: form.password,
+    };
+    let user = User::create(create_user, state.database_pool()).await?;
 
     // Set user ID in session (auto-login after registration)
-    session.set_user_id(Some(user_id));
+    session.set_user_id(Some(user.id));
 
     // Add success flash message
     session.add_flash(FlashMessage::success("Account created successfully! Welcome!"));

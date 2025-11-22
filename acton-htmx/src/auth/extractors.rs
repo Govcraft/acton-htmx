@@ -70,7 +70,7 @@ where
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &S,
+        state: &S,
     ) -> Result<Self, Self::Rejection> {
         // Get session from request extensions
         let session = parts
@@ -84,31 +84,18 @@ where
             .user_id()
             .ok_or(AuthenticationError::NotAuthenticated)?;
 
-        // Check if this is an HTMX request (for error handling)
-        let is_htmx = parts
-            .headers
-            .get("HX-Request")
-            .and_then(|v| v.to_str().ok())
-            == Some("true");
+        // Extract state to get database pool
+        let app_state = ActonHtmxState::from_ref(state);
 
         // Load user from database
-        // Note: In production, you might want to cache this in the session
-        #[cfg(feature = "postgres")]
-        {
-            // For now, we'll need a database pool in the state
-            // This is a TODO for Week 8 - add database pool to ActonHtmxState
-            // For compilation purposes, we'll return an error
-            let _ = user_id;
-            let _ = is_htmx;
-            Err(AuthenticationError::DatabaseNotConfigured)
-        }
+        let user = User::find_by_id(user_id, app_state.database_pool())
+            .await
+            .map_err(|e| match e {
+                UserError::NotFound => AuthenticationError::NotAuthenticated,
+                _ => AuthenticationError::DatabaseError(e),
+            })?;
 
-        #[cfg(not(feature = "postgres"))]
-        {
-            let _ = user_id;
-            let _ = is_htmx;
-            Err(AuthenticationError::DatabaseNotConfigured)
-        }
+        Ok(Self(user))
     }
 }
 
@@ -142,7 +129,7 @@ where
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &S,
+        state: &S,
     ) -> Result<Self, Self::Rejection> {
         // Get session from request extensions
         let Some(session) = parts.extensions.get::<Session>().cloned() else {
@@ -154,20 +141,15 @@ where
             return Ok(Self(None)); // No user_id = not authenticated
         };
 
-        // Load user from database
-        #[cfg(feature = "postgres")]
-        {
-            // For now, we'll need a database pool in the state
-            // This is a TODO for Week 8 - add database pool to ActonHtmxState
-            let _ = user_id;
-            Ok(Self(None))
-        }
+        // Extract state to get database pool
+        let app_state = ActonHtmxState::from_ref(state);
 
-        #[cfg(not(feature = "postgres"))]
-        {
-            let _ = user_id;
-            Ok(Self(None))
-        }
+        // Load user from database
+        let user = User::find_by_id(user_id, app_state.database_pool())
+            .await
+            .ok(); // Convert Result to Option - failures return None
+
+        Ok(Self(user))
     }
 }
 
