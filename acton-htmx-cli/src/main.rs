@@ -11,7 +11,7 @@ pub mod templates;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{DbCommand, DevCommand, NewCommand, ScaffoldCommand};
+use commands::{DbCommand, DevCommand, GenerateCommand, JobsCommand, NewCommand, ScaffoldCommand};
 
 // Re-export for library usage
 pub use templates::ProjectTemplate;
@@ -43,6 +43,16 @@ enum Commands {
     Scaffold {
         #[command(subcommand)]
         command: ScaffoldCommands,
+    },
+    /// Generate code (jobs, models, etc.)
+    Generate {
+        #[command(subcommand)]
+        command: GenerateCommand,
+    },
+    /// Manage background jobs
+    Jobs {
+        #[command(subcommand)]
+        command: JobsCommand,
     },
 }
 
@@ -97,6 +107,12 @@ fn main() -> Result<()> {
                     cmd.execute()?;
                 }
             }
+        }
+        Commands::Generate { command } => {
+            command.execute()?;
+        }
+        Commands::Jobs { command } => {
+            command.execute()?;
         }
     }
 

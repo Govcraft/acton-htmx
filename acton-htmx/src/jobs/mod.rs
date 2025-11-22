@@ -64,10 +64,13 @@
 
 mod cancellation;
 mod error;
+pub mod examples;
 mod job;
 mod observability;
 mod schedule;
 mod status;
+#[cfg(test)]
+pub mod testing;
 
 pub use cancellation::{
     CancellationToken, JobCancellationManager, JobShutdownCoordinator, ShutdownResult,

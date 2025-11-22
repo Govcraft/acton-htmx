@@ -7,7 +7,9 @@ use std::fs;
 use std::path::Path;
 
 pub mod files;
+pub mod jobs;
 pub use files::*;
+pub use jobs::JOB_TEMPLATE;
 
 /// Project template generator
 pub struct ProjectTemplate {
