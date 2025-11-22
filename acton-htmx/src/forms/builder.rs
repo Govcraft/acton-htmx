@@ -287,6 +287,33 @@ impl<'a> FormBuilder<'a> {
         FieldBuilder::new(self, FormField::input(name, input_type))
     }
 
+    /// Add a file upload field and return a file field builder
+    ///
+    /// This automatically sets the form enctype to multipart/form-data.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use acton_htmx::forms::FormBuilder;
+    ///
+    /// let form = FormBuilder::new("/upload", "POST")
+    ///     .file("avatar")
+    ///         .label("Profile Picture")
+    ///         .accept("image/png,image/jpeg")
+    ///         .max_size_mb(5)
+    ///         .required()
+    ///         .done()
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn file(mut self, name: impl Into<String>) -> FileFieldBuilder<'a> {
+        // Automatically set multipart encoding
+        if self.enctype.is_none() {
+            self.enctype = Some("multipart/form-data".into());
+        }
+        FileFieldBuilder::new(self, FormField::input(name, InputType::File))
+    }
+
     /// Add a textarea field and return a field builder
     #[must_use]
     pub fn textarea(self, name: impl Into<String>) -> TextareaBuilder<'a> {
@@ -791,6 +818,159 @@ impl<'a> CheckboxBuilder<'a> {
     #[must_use]
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.field.id = Some(id.into());
+        self
+    }
+
+    /// Finish building this field and return to form builder
+    #[must_use]
+    pub fn done(mut self) -> FormBuilder<'a> {
+        self.form.fields.push(self.field);
+        self.form
+    }
+}
+
+// =============================================================================
+// File Field Builder
+// =============================================================================
+
+/// Builder for file upload fields
+///
+/// Provides file-specific configuration options like accept types,
+/// multiple file selection, size limits, and progress tracking.
+pub struct FileFieldBuilder<'a> {
+    form: FormBuilder<'a>,
+    field: FormField,
+}
+
+impl<'a> FileFieldBuilder<'a> {
+    const fn new(form: FormBuilder<'a>, field: FormField) -> Self {
+        Self { form, field }
+    }
+
+    /// Set the field label
+    #[must_use]
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.field.label = Some(label.into());
+        self
+    }
+
+    /// Set accepted file types (MIME types or file extensions)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use acton_htmx::forms::FormBuilder;
+    ///
+    /// // MIME types
+    /// let form = FormBuilder::new("/upload", "POST")
+    ///     .file("avatar")
+    ///         .accept("image/png,image/jpeg,image/gif")
+    ///         .done()
+    ///     .build();
+    ///
+    /// // File extensions
+    /// let form2 = FormBuilder::new("/upload", "POST")
+    ///     .file("document")
+    ///         .accept(".pdf,.doc,.docx")
+    ///         .done()
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn accept(mut self, types: impl Into<String>) -> Self {
+        self.field.file_attrs.accept = Some(types.into());
+        self
+    }
+
+    /// Allow multiple file selection
+    #[must_use]
+    pub const fn multiple(mut self) -> Self {
+        self.field.file_attrs.multiple = true;
+        self
+    }
+
+    /// Set maximum file size in megabytes (client-side hint)
+    ///
+    /// Note: This adds a data attribute for client-side validation hints,
+    /// but server-side validation is still required.
+    #[must_use]
+    pub const fn max_size_mb(mut self, size_mb: u32) -> Self {
+        self.field.file_attrs.max_size_mb = Some(size_mb);
+        self
+    }
+
+    /// Enable image preview for uploaded files
+    #[must_use]
+    pub const fn show_preview(mut self) -> Self {
+        self.field.file_attrs.show_preview = true;
+        self
+    }
+
+    /// Enable drag-and-drop zone styling
+    #[must_use]
+    pub const fn drag_drop(mut self) -> Self {
+        self.field.file_attrs.drag_drop = true;
+        self
+    }
+
+    /// Set SSE endpoint for upload progress tracking
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use acton_htmx::forms::FormBuilder;
+    ///
+    /// let form = FormBuilder::new("/upload", "POST")
+    ///     .file("large_file")
+    ///         .label("Large File Upload")
+    ///         .progress_endpoint("/upload/progress")
+    ///         .done()
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn progress_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.field.file_attrs.progress_endpoint = Some(endpoint.into());
+        self
+    }
+
+    /// Mark field as required
+    #[must_use]
+    pub const fn required(mut self) -> Self {
+        self.field.flags.required = true;
+        self
+    }
+
+    /// Mark field as disabled
+    #[must_use]
+    pub const fn disabled(mut self) -> Self {
+        self.field.flags.disabled = true;
+        self
+    }
+
+    /// Set CSS class
+    #[must_use]
+    pub fn class(mut self, class: impl Into<String>) -> Self {
+        self.field.class = Some(class.into());
+        self
+    }
+
+    /// Set element ID
+    #[must_use]
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.field.id = Some(id.into());
+        self
+    }
+
+    /// Set help text
+    #[must_use]
+    pub fn help(mut self, text: impl Into<String>) -> Self {
+        self.field.help_text = Some(text.into());
+        self
+    }
+
+    /// Add a custom attribute
+    #[must_use]
+    pub fn attr(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.field.custom_attrs.push((name.into(), value.into()));
         self
     }
 

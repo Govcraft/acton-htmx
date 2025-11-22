@@ -281,6 +281,29 @@ impl FormRenderer {
             Self::write_attr(&mut html, "pattern", pattern);
         }
 
+        // File-specific attributes (only for file inputs)
+        if input_type == InputType::File {
+            if let Some(ref accept) = field.file_attrs.accept {
+                Self::write_attr(&mut html, "accept", accept);
+            }
+            if field.file_attrs.multiple {
+                html.push_str(" multiple");
+            }
+            // Add max size as data attribute for client-side validation hints
+            if let Some(size_mb) = field.file_attrs.max_size_mb {
+                Self::write_attr(&mut html, "data-max-size-mb", &size_mb.to_string());
+            }
+            if field.file_attrs.show_preview {
+                html.push_str(r#" data-preview="true""#);
+            }
+            if field.file_attrs.drag_drop {
+                html.push_str(r#" data-drag-drop="true""#);
+            }
+            if let Some(ref endpoint) = field.file_attrs.progress_endpoint {
+                Self::write_attr(&mut html, "data-progress-endpoint", endpoint);
+            }
+        }
+
         // Data attributes
         for (name, value) in &field.data_attrs {
             Self::write_attr(&mut html, &format!("data-{name}"), value);

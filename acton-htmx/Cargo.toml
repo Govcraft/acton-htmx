@@ -61,6 +61,7 @@ futures-util = "0.3.31"
 infer = { version = "0.19.0", features = ["alloc"] }
 image = { version = "0.25.6", features = ["jpeg", "png", "gif", "webp"] }
 kamadak-exif = "0.6.1"
+httpdate = "1.0.3"
 
 [dev-dependencies]
 proptest.workspace = true

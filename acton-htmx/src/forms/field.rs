@@ -197,6 +197,8 @@ pub struct FormField {
     pub data_attrs: Vec<(String, String)>,
     /// Custom attributes
     pub custom_attrs: Vec<(String, String)>,
+    /// File upload-specific attributes (only used for InputType::File)
+    pub file_attrs: FileFieldAttrs,
 }
 
 impl FormField {
@@ -263,6 +265,7 @@ impl FormField {
             htmx: HtmxFieldAttrs::default(),
             data_attrs: Vec::new(),
             custom_attrs: Vec::new(),
+            file_attrs: FileFieldAttrs::default(),
         }
     }
 
@@ -346,6 +349,24 @@ impl HtmxFieldAttrs {
             || self.vals.is_some()
             || self.validate
     }
+}
+
+/// File upload-specific attributes for file input fields
+#[derive(Debug, Clone, Default)]
+pub struct FileFieldAttrs {
+    /// Accept attribute (comma-separated MIME types or file extensions)
+    /// Example: "image/png,image/jpeg" or ".png,.jpg"
+    pub accept: Option<String>,
+    /// Allow multiple file selection
+    pub multiple: bool,
+    /// Maximum file size in MB (for client-side hint via data attribute)
+    pub max_size_mb: Option<u32>,
+    /// Show file preview (for images)
+    pub show_preview: bool,
+    /// Enable drag-and-drop zone styling
+    pub drag_drop: bool,
+    /// Upload progress tracking via SSE endpoint
+    pub progress_endpoint: Option<String>,
 }
 
 #[cfg(test)]

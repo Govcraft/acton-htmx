@@ -73,9 +73,9 @@ mod error;
 mod field;
 mod render;
 
-pub use builder::{FieldBuilder, FormBuilder};
+pub use builder::{FieldBuilder, FileFieldBuilder, FormBuilder};
 pub use error::{FieldError, ValidationErrors};
-pub use field::{FormField, InputType, SelectOption};
+pub use field::{FileFieldAttrs, FormField, InputType, SelectOption};
 pub use render::{FormRenderOptions, FormRenderer};
 
 #[cfg(test)]
@@ -220,5 +220,86 @@ mod tests {
 
         assert!(form.contains(r#"id="my-form""#));
         assert!(form.contains(r#"class="form-styled""#));
+    }
+
+    #[test]
+    fn test_file_upload_field() {
+        let form = FormBuilder::new("/upload", "POST")
+            .file("avatar")
+            .label("Profile Picture")
+            .accept("image/png,image/jpeg")
+            .max_size_mb(5)
+            .required()
+            .done()
+            .build();
+
+        assert!(form.contains(r#"enctype="multipart/form-data""#));
+        assert!(form.contains(r#"type="file""#));
+        assert!(form.contains(r#"accept="image/png,image/jpeg""#));
+        assert!(form.contains(r#"data-max-size-mb="5""#));
+        assert!(form.contains("required"));
+    }
+
+    #[test]
+    fn test_file_upload_multiple() {
+        let form = FormBuilder::new("/upload", "POST")
+            .file("attachments")
+            .label("Attachments")
+            .multiple()
+            .done()
+            .build();
+
+        assert!(form.contains(r#"enctype="multipart/form-data""#));
+        assert!(form.contains("multiple"));
+    }
+
+    #[test]
+    fn test_file_upload_with_preview() {
+        let form = FormBuilder::new("/upload", "POST")
+            .file("image")
+            .label("Image")
+            .show_preview()
+            .drag_drop()
+            .done()
+            .build();
+
+        assert!(form.contains(r#"data-preview="true""#));
+        assert!(form.contains(r#"data-drag-drop="true""#));
+    }
+
+    #[test]
+    fn test_file_upload_with_progress_endpoint() {
+        let form = FormBuilder::new("/upload", "POST")
+            .file("large_file")
+            .label("Large File")
+            .progress_endpoint("/upload/progress")
+            .done()
+            .build();
+
+        assert!(form.contains(r#"data-progress-endpoint="/upload/progress""#));
+    }
+
+    #[test]
+    fn test_multipart_auto_set() {
+        let form = FormBuilder::new("/upload", "POST")
+            .file("file1")
+            .done()
+            .build();
+
+        // Enctype should be automatically set when file() is called
+        assert!(form.contains(r#"enctype="multipart/form-data""#));
+    }
+
+    #[test]
+    fn test_file_upload_with_help_text() {
+        let form = FormBuilder::new("/upload", "POST")
+            .file("avatar")
+            .label("Avatar")
+            .help("Maximum size: 5MB. Accepted formats: PNG, JPEG")
+            .done()
+            .build();
+
+        assert!(form.contains("Maximum size: 5MB"));
+        assert!(form.contains("Accepted formats: PNG, JPEG"));
     }
 }
