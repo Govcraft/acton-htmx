@@ -158,17 +158,5 @@ pub fn assert_hx_push_url(response: &TestResponse, expected_url: Option<&str>) {
     }
 }
 
-/// Assert that the response is an HTMX request (has HX-Request header)
-///
-/// # Panics
-///
-/// Panics if the response doesn't have the HX-Request header
-pub fn assert_is_htmx_request(response: &TestResponse) {
-    assert!(
-        response.headers().contains_key("HX-Request"),
-        "Expected HX-Request header to be present"
-    );
-}
-
 // Tests for assertion helpers require integration tests with actual TestServer
 // See integration tests in tests/ directory for usage examples

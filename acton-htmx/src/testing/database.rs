@@ -28,6 +28,7 @@ use std::sync::Arc;
 pub struct TestDatabase {
     pool: Arc<PgPool>,
     database_name: String,
+    postgres_url: String,
 }
 
 impl TestDatabase {
@@ -78,13 +79,15 @@ impl TestDatabase {
 
         // Run migrations if requested
         if run_migrations {
-            // Note: In real usage, you'd run actual migrations here
-            // sqlx::migrate!("./migrations").run(&test_pool).await?;
+            sqlx::migrate!("../migrations")
+                .run(&test_pool)
+                .await?;
         }
 
         Ok(Self {
             pool: Arc::new(test_pool),
             database_name,
+            postgres_url,
         })
     }
 
@@ -103,12 +106,45 @@ impl TestDatabase {
 
 impl Drop for TestDatabase {
     fn drop(&mut self) {
-        // Note: Dropping the database requires async context
-        // In practice, you might want to use a cleanup task or
-        // rely on PostgreSQL's template cleanup
-        //
-        // For now, we rely on manual cleanup or test framework cleanup
-        tracing::debug!("Test database {} should be cleaned up", self.database_name);
+        // Drop the database asynchronously in a blocking context
+        let database_name = self.database_name.clone();
+        let postgres_url = self.postgres_url.clone();
+
+        // Close the connection pool before dropping the database
+        // This is important because PostgreSQL won't drop a database with active connections
+        let pool = Arc::clone(&self.pool);
+        std::mem::drop(pool);
+
+        // Use a blocking task to drop the database
+        // This is acceptable in Drop because it only runs during test cleanup
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime for cleanup");
+            rt.block_on(async {
+                match PgPool::connect(&postgres_url).await {
+                    Ok(pool) => {
+                        // Force disconnect all connections to the test database
+                        let force_disconnect = format!(
+                            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{database_name}'"
+                        );
+                        let _ = sqlx::query(&force_disconnect).execute(&pool).await;
+
+                        // Drop the database
+                        let drop_query = format!("DROP DATABASE IF EXISTS {database_name}");
+                        match sqlx::query(&drop_query).execute(&pool).await {
+                            Ok(_) => {
+                                tracing::debug!("Successfully dropped test database: {database_name}");
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to drop test database {database_name}: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to connect for cleanup of {database_name}: {e}");
+                    }
+                }
+            });
+        });
     }
 }
 

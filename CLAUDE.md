@@ -475,3 +475,4 @@ let email = Email::from_template(&template)?
 3. Create account linking UI and templates
 4. Add comprehensive OAuth2 tests
 5. Document OAuth2 setup and configuration
+- Always use cargo nextest run as the test runner
