@@ -3,24 +3,19 @@
 //! This module implements a generic OIDC provider that can work with any
 //! OpenID Connect compliant identity provider (Okta, Auth0, Keycloak, etc.).
 
-use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    TokenResponse, TokenUrl,
-};
 use openidconnect::{
     core::CoreProviderMetadata,
     IssuerUrl,
 };
 use serde::{Deserialize, Serialize};
 
+use super::base::BaseOAuthProvider;
 use crate::oauth2::http::async_http_client;
-use crate::oauth2::types::{ConfiguredClient, OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
+use crate::oauth2::types::{OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
 
 /// Generic OpenID Connect provider
 pub struct OidcProvider {
-    client: ConfiguredClient,
-    userinfo_url: String,
+    base: BaseOAuthProvider,
 }
 
 impl OidcProvider {
@@ -38,7 +33,7 @@ impl OidcProvider {
         // 1. Manual configuration (all three URLs: auth_url, token_url, userinfo_url)
         // 2. Discovery via issuer URL (only auth_url provided)
 
-        let (client, userinfo_url) = if config.auth_url.is_some()
+        let base = if config.auth_url.is_some()
             && config.token_url.is_some()
             && config.userinfo_url.is_some()
         {
@@ -48,27 +43,24 @@ impl OidcProvider {
             let token_url = config.token_url.as_ref().unwrap();
             let userinfo_url = config.userinfo_url.as_ref().unwrap();
 
-            Self::manual_config(config, auth_url, token_url, userinfo_url)?
+            BaseOAuthProvider::new(auth_url, token_url, config, userinfo_url.clone())?
         } else if let Some(issuer_url) = &config.auth_url {
             // Discovery - only issuer URL provided
-            Self::discover(config, issuer_url).await?
+            Self::discover_and_create(config, issuer_url).await?
         } else {
             return Err(OAuthError::Generic(
                 "Either provide all URLs (auth_url, token_url, userinfo_url) for manual config, or just auth_url for discovery".to_string(),
             ));
         };
 
-        Ok(Self {
-            client,
-            userinfo_url,
-        })
+        Ok(Self { base })
     }
 
-    /// Discover OIDC configuration from issuer
-    async fn discover(
+    /// Discover OIDC configuration from issuer and create base provider
+    async fn discover_and_create(
         config: &ProviderConfig,
         issuer: &str,
-    ) -> Result<(ConfiguredClient, String), OAuthError> {
+    ) -> Result<BaseOAuthProvider, OAuthError> {
         let issuer_url = IssuerUrl::new(issuer.to_string())
             .map_err(|e| OAuthError::Generic(format!("Invalid issuer URL: {e}")))?;
 
@@ -84,54 +76,13 @@ impl OidcProvider {
         let auth_url = provider_metadata
             .authorization_endpoint()
             .to_string();
+
         let token_url = provider_metadata
             .token_endpoint()
             .ok_or_else(|| OAuthError::Generic("Provider has no token endpoint".to_string()))?
             .to_string();
 
-        // oauth2 5.0 API: BasicClient::new() only takes ClientId
-        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
-            .set_client_secret(ClientSecret::new(config.client_secret.clone()))
-            .set_auth_uri(
-                AuthUrl::new(auth_url)
-                    .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
-            )
-            .set_token_uri(
-                TokenUrl::new(token_url)
-                    .map_err(|e| OAuthError::Generic(format!("Invalid token URL: {e}")))?,
-            )
-            .set_redirect_uri(
-                RedirectUrl::new(config.redirect_uri.clone())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-            );
-
-        Ok((client, userinfo_url))
-    }
-
-    /// Manual OIDC configuration (no discovery)
-    fn manual_config(
-        config: &ProviderConfig,
-        auth_url: &str,
-        token_url: &str,
-        userinfo_url: &str,
-    ) -> Result<(ConfiguredClient, String), OAuthError> {
-        // oauth2 5.0 API: BasicClient::new() only takes ClientId
-        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
-            .set_client_secret(ClientSecret::new(config.client_secret.clone()))
-            .set_auth_uri(
-                AuthUrl::new(auth_url.to_string())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
-            )
-            .set_token_uri(
-                TokenUrl::new(token_url.to_string())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid token URL: {e}")))?,
-            )
-            .set_redirect_uri(
-                RedirectUrl::new(config.redirect_uri.clone())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-            );
-
-        Ok((client, userinfo_url.to_string()))
+        BaseOAuthProvider::new(&auth_url, &token_url, config, userinfo_url)
     }
 
     /// Generate authorization URL and CSRF state
@@ -139,22 +90,7 @@ impl OidcProvider {
     /// Returns tuple of (authorization_url, csrf_state, pkce_verifier)
     #[must_use]
     pub fn authorization_url(&self) -> (String, String, String) {
-        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-
-        let (auth_url, csrf_state) = self
-            .client
-            .authorize_url(CsrfToken::new_random)
-            .add_scope(Scope::new("openid".to_string()))
-            .add_scope(Scope::new("email".to_string()))
-            .add_scope(Scope::new("profile".to_string()))
-            .set_pkce_challenge(pkce_challenge)
-            .url();
-
-        (
-            auth_url.to_string(),
-            csrf_state.secret().clone(),
-            pkce_verifier.secret().clone(),
-        )
+        self.base.authorization_url(&["openid", "email", "profile"])
     }
 
     /// Exchange authorization code for access token
@@ -167,27 +103,7 @@ impl OidcProvider {
         code: &str,
         pkce_verifier: &str,
     ) -> Result<OAuthToken, OAuthError> {
-        let token_response = self
-            .client
-            .exchange_code(AuthorizationCode::new(code.to_string()))
-            .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.to_string()))
-            .request_async(&async_http_client)
-            .await
-            .map_err(|e| OAuthError::TokenExchangeFailed(e.to_string()))?;
-
-        Ok(OAuthToken {
-            access_token: token_response.access_token().secret().clone(),
-            refresh_token: token_response
-                .refresh_token()
-                .map(|t| t.secret().clone()),
-            token_type: "Bearer".to_string(),
-            expires_at: token_response.expires_in().map(|duration| {
-                std::time::SystemTime::now() + std::time::Duration::from_secs(duration.as_secs())
-            }),
-            scopes: token_response
-                .scopes()
-                .map(|scopes| scopes.iter().map(|s| s.to_string()).collect()),
-        })
+        self.base.exchange_code(code, pkce_verifier).await
     }
 
     /// Fetch user information using access token
@@ -196,25 +112,10 @@ impl OidcProvider {
     ///
     /// Returns error if the user info request fails
     pub async fn fetch_user_info(&self, access_token: &str) -> Result<OAuthUserInfo, OAuthError> {
-        let client = reqwest::Client::new();
-        let response = client
-            .get(&self.userinfo_url)
-            .bearer_auth(access_token)
-            .send()
-            .await
-            .map_err(|e| OAuthError::UserInfoFailed(e.to_string()))?;
+        let json = self.base.fetch_user_info_json(access_token).await?;
 
-        if !response.status().is_success() {
-            return Err(OAuthError::UserInfoFailed(format!(
-                "HTTP {}",
-                response.status()
-            )));
-        }
-
-        let oidc_user: OidcUserInfo = response
-            .json()
-            .await
-            .map_err(|e| OAuthError::UserInfoFailed(format!("Failed to parse JSON: {e}")))?;
+        let oidc_user: OidcUserInfo = serde_json::from_value(json)
+            .map_err(|e| OAuthError::UserInfoFailed(format!("Failed to parse OIDC user info: {e}")))?;
 
         Ok(OAuthUserInfo {
             provider_user_id: oidc_user.sub,

@@ -2,19 +2,14 @@
 //!
 //! This module implements OAuth2 authentication with GitHub using their OAuth2 API.
 
-use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    TokenResponse, TokenUrl,
-};
 use serde::{Deserialize, Serialize};
 
-use crate::oauth2::http::async_http_client;
-use crate::oauth2::types::{ConfiguredClient, OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
+use super::base::BaseOAuthProvider;
+use crate::oauth2::types::{OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
 
 /// GitHub OAuth2 provider
 pub struct GitHubProvider {
-    client: ConfiguredClient,
+    base: BaseOAuthProvider,
 }
 
 impl GitHubProvider {
@@ -24,23 +19,14 @@ impl GitHubProvider {
     ///
     /// Returns error if the configuration is invalid
     pub fn new(config: &ProviderConfig) -> Result<Self, OAuthError> {
-        // oauth2 5.0 API: BasicClient::new() only takes ClientId
-        let client = BasicClient::new(ClientId::new(config.client_id.clone()))
-            .set_client_secret(ClientSecret::new(config.client_secret.clone()))
-            .set_auth_uri(
-                AuthUrl::new("https://github.com/login/oauth/authorize".to_string())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid auth URL: {e}")))?,
-            )
-            .set_token_uri(
-                TokenUrl::new("https://github.com/login/oauth/access_token".to_string())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid token URL: {e}")))?,
-            )
-            .set_redirect_uri(
-                RedirectUrl::new(config.redirect_uri.clone())
-                    .map_err(|e| OAuthError::Generic(format!("Invalid redirect URI: {e}")))?,
-            );
-
-        Ok(Self { client })
+        Ok(Self {
+            base: BaseOAuthProvider::new(
+                "https://github.com/login/oauth/authorize",
+                "https://github.com/login/oauth/access_token",
+                config,
+                "https://api.github.com/user".to_string(),
+            )?,
+        })
     }
 
     /// Generate authorization URL and CSRF state
@@ -48,21 +34,7 @@ impl GitHubProvider {
     /// Returns tuple of (authorization_url, csrf_state, pkce_verifier)
     #[must_use]
     pub fn authorization_url(&self) -> (String, String, String) {
-        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-
-        let (auth_url, csrf_state) = self
-            .client
-            .authorize_url(CsrfToken::new_random)
-            .add_scope(Scope::new("read:user".to_string()))
-            .add_scope(Scope::new("user:email".to_string()))
-            .set_pkce_challenge(pkce_challenge)
-            .url();
-
-        (
-            auth_url.to_string(),
-            csrf_state.secret().clone(),
-            pkce_verifier.secret().clone(),
-        )
+        self.base.authorization_url(&["read:user", "user:email"])
     }
 
     /// Exchange authorization code for access token
@@ -75,27 +47,7 @@ impl GitHubProvider {
         code: &str,
         pkce_verifier: &str,
     ) -> Result<OAuthToken, OAuthError> {
-        let token_response = self
-            .client
-            .exchange_code(AuthorizationCode::new(code.to_string()))
-            .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier.to_string()))
-            .request_async(&async_http_client)
-            .await
-            .map_err(|e| OAuthError::TokenExchangeFailed(e.to_string()))?;
-
-        Ok(OAuthToken {
-            access_token: token_response.access_token().secret().clone(),
-            refresh_token: token_response
-                .refresh_token()
-                .map(|t| t.secret().clone()),
-            token_type: "Bearer".to_string(),
-            expires_at: token_response.expires_in().map(|duration| {
-                std::time::SystemTime::now() + std::time::Duration::from_secs(duration.as_secs())
-            }),
-            scopes: token_response
-                .scopes()
-                .map(|scopes| scopes.iter().map(|s| s.to_string()).collect()),
-        })
+        self.base.exchange_code(code, pkce_verifier).await
     }
 
     /// Fetch user information using access token
@@ -104,46 +56,31 @@ impl GitHubProvider {
     ///
     /// Returns error if the user info request fails
     pub async fn fetch_user_info(&self, access_token: &str) -> Result<OAuthUserInfo, OAuthError> {
-        let client = reqwest::Client::new();
-
         // Fetch user profile
-        let user_response = client
-            .get("https://api.github.com/user")
-            .bearer_auth(access_token)
-            .header("User-Agent", "acton-htmx")
-            .send()
-            .await
-            .map_err(|e| OAuthError::UserInfoFailed(e.to_string()))?;
+        let user_json = self.base
+            .fetch_json_with_headers(
+                "https://api.github.com/user",
+                access_token,
+                Some(&[("User-Agent", "acton-htmx")]),
+            )
+            .await?;
 
-        if !user_response.status().is_success() {
-            return Err(OAuthError::UserInfoFailed(format!(
-                "HTTP {}",
-                user_response.status()
-            )));
-        }
-
-        let github_user: GitHubUser = user_response
-            .json()
-            .await
-            .map_err(|e| OAuthError::UserInfoFailed(format!("Failed to parse user JSON: {e}")))?;
+        let github_user: GitHubUser = serde_json::from_value(user_json)
+            .map_err(|e| OAuthError::UserInfoFailed(format!("Failed to parse GitHub user: {e}")))?;
 
         // Fetch user emails (to get primary verified email)
-        let emails_response = client
-            .get("https://api.github.com/user/emails")
-            .bearer_auth(access_token)
-            .header("User-Agent", "acton-htmx")
-            .send()
-            .await
-            .map_err(|e| OAuthError::UserInfoFailed(e.to_string()))?;
+        let emails_json = self.base
+            .fetch_json_with_headers(
+                "https://api.github.com/user/emails",
+                access_token,
+                Some(&[("User-Agent", "acton-htmx")]),
+            )
+            .await;
 
-        let emails: Vec<GitHubEmail> = if emails_response.status().is_success() {
-            emails_response
-                .json()
-                .await
-                .map_err(|e| OAuthError::UserInfoFailed(format!("Failed to parse emails JSON: {e}")))?
-        } else {
-            vec![]
-        };
+        let emails: Vec<GitHubEmail> = emails_json.map_or_else(
+            |_| vec![],
+            |json| serde_json::from_value(json).unwrap_or_default(),
+        );
 
         // Find primary verified email
         let primary_email = emails
