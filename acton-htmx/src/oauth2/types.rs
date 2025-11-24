@@ -3,9 +3,28 @@
 //! This module defines the foundational types for OAuth2 authentication,
 //! including provider configurations, tokens, and user information.
 
+use oauth2::basic::BasicClient;
+use oauth2::{EndpointNotSet, EndpointSet};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
+
+/// Type alias for a configured OAuth2 client with auth and token endpoints set
+///
+/// This is the standard client type used by all OAuth2 providers (Google, GitHub, OIDC).
+/// The type parameters indicate which endpoints are configured:
+/// - `EndpointSet` for `HasAuthUrl` - Authorization endpoint is configured
+/// - `EndpointNotSet` for `HasDeviceAuthUrl` - Device auth not used
+/// - `EndpointNotSet` for `HasIntrospectionUrl` - Token introspection not used
+/// - `EndpointNotSet` for `HasRevocationUrl` - Token revocation not used
+/// - `EndpointSet` for `HasTokenUrl` - Token exchange endpoint is configured
+pub type ConfiguredClient = BasicClient<
+    EndpointSet,    // HasAuthUrl
+    EndpointNotSet, // HasDeviceAuthUrl
+    EndpointNotSet, // HasIntrospectionUrl
+    EndpointNotSet, // HasRevocationUrl
+    EndpointSet,    // HasTokenUrl
+>;
 
 /// OAuth2 provider identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

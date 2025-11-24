@@ -4,22 +4,13 @@
 
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, EndpointNotSet, EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+    ClientSecret, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::oauth2::http::async_http_client;
-use crate::oauth2::types::{OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
-
-// BasicClient with auth and token endpoints set
-type ConfiguredClient = BasicClient<
-    EndpointSet,          // HasAuthUrl
-    EndpointNotSet,       // HasDeviceAuthUrl
-    EndpointNotSet,       // HasIntrospectionUrl
-    EndpointNotSet,       // HasRevocationUrl
-    EndpointSet,          // HasTokenUrl
->;
+use crate::oauth2::types::{ConfiguredClient, OAuthError, OAuthToken, OAuthUserInfo, ProviderConfig};
 
 /// GitHub OAuth2 provider
 pub struct GitHubProvider {

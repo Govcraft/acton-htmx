@@ -16,6 +16,7 @@ pub mod cedar;
 pub mod cedar_template;
 pub mod csrf;
 pub mod file_serving;
+pub mod helpers;
 pub mod rate_limit;
 pub mod security_headers;
 pub mod session;
