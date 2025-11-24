@@ -72,17 +72,28 @@ where
         parts: &mut Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
+        // Check if this is an HTMX request
+        let is_htmx = parts
+            .headers
+            .get("HX-Request")
+            .and_then(|v| v.to_str().ok())
+            == Some("true");
+
         // Get session from request extensions
-        let session = parts
-            .extensions
-            .get::<Session>()
-            .cloned()
-            .ok_or(AuthenticationError::MissingSession)?;
+        let session = parts.extensions.get::<Session>().cloned().ok_or(
+            if is_htmx {
+                AuthenticationError::MissingSessionHtmx
+            } else {
+                AuthenticationError::MissingSession
+            },
+        )?;
 
         // Check if user is authenticated
-        let user_id = session
-            .user_id()
-            .ok_or(AuthenticationError::NotAuthenticated)?;
+        let user_id = session.user_id().ok_or(if is_htmx {
+            AuthenticationError::NotAuthenticatedHtmx
+        } else {
+            AuthenticationError::NotAuthenticated
+        })?;
 
         // Extract state to get database pool
         let app_state = ActonHtmxState::from_ref(state);
@@ -91,7 +102,13 @@ where
         let user = User::find_by_id(user_id, app_state.database_pool())
             .await
             .map_err(|e| match e {
-                UserError::NotFound => AuthenticationError::NotAuthenticated,
+                UserError::NotFound => {
+                    if is_htmx {
+                        AuthenticationError::NotAuthenticatedHtmx
+                    } else {
+                        AuthenticationError::NotAuthenticated
+                    }
+                }
                 _ => AuthenticationError::DatabaseError(e),
             })?;
 
@@ -156,10 +173,16 @@ where
 /// Authentication errors for extractors
 #[derive(Debug)]
 pub enum AuthenticationError {
-    /// No session found in request extensions
+    /// No session found in request extensions (HTMX request)
+    MissingSessionHtmx,
+
+    /// No session found in request extensions (regular request)
     MissingSession,
 
-    /// Session exists but user is not authenticated
+    /// Session exists but user is not authenticated (HTMX request)
+    NotAuthenticatedHtmx,
+
+    /// Session exists but user is not authenticated (regular request)
     NotAuthenticated,
 
     /// Database not configured (development/testing)
@@ -172,9 +195,17 @@ pub enum AuthenticationError {
 impl IntoResponse for AuthenticationError {
     fn into_response(self) -> Response {
         match self {
+            Self::MissingSessionHtmx | Self::NotAuthenticatedHtmx => {
+                // For HTMX requests, return 401 with HX-Redirect header
+                (
+                    StatusCode::UNAUTHORIZED,
+                    [("HX-Redirect", "/login")],
+                    "Unauthorized",
+                )
+                    .into_response()
+            }
             Self::MissingSession | Self::NotAuthenticated => {
-                // For now, always redirect to login
-                // TODO: Check if HTMX request and return 401 with HX-Redirect
+                // For regular requests, redirect to login
                 Redirect::to("/login").into_response()
             }
             Self::DatabaseNotConfigured => {
@@ -197,15 +228,70 @@ impl IntoResponse for AuthenticationError {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
     #[test]
-    fn test_authenticated_extractor_placeholder() {
-        // Placeholder test - will be expanded when database integration is complete
-        // This test exists to satisfy test coverage requirements
+    fn test_authentication_error_missing_session_regular_returns_redirect() {
+        let error = AuthenticationError::MissingSession;
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "/login"
+        );
     }
 
     #[test]
-    fn test_optional_auth_extractor_placeholder() {
-        // Placeholder test - will be expanded when database integration is complete
-        // This test exists to satisfy test coverage requirements
+    fn test_authentication_error_missing_session_htmx_returns_401_with_hx_redirect() {
+        let error = AuthenticationError::MissingSessionHtmx;
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get("HX-Redirect").unwrap(),
+            "/login"
+        );
+    }
+
+    #[test]
+    fn test_authentication_error_not_authenticated_regular_returns_redirect() {
+        let error = AuthenticationError::NotAuthenticated;
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "/login"
+        );
+    }
+
+    #[test]
+    fn test_authentication_error_not_authenticated_htmx_returns_401_with_hx_redirect() {
+        let error = AuthenticationError::NotAuthenticatedHtmx;
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get("HX-Redirect").unwrap(),
+            "/login"
+        );
+    }
+
+    #[test]
+    fn test_authentication_error_database_not_configured_returns_500() {
+        let error = AuthenticationError::DatabaseNotConfigured;
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_authentication_error_database_error_returns_500() {
+        let error = AuthenticationError::DatabaseError(UserError::NotFound);
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
