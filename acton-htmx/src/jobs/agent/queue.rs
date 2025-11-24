@@ -108,5 +108,45 @@ impl JobQueue {
     pub(super) fn contains(&self, id: &JobId) -> bool {
         self.ids.contains(id)
     }
+
+    /// Remove a specific job from the queue.
+    ///
+    /// Returns `Some(job)` if the job was found and removed, `None` otherwise.
+    ///
+    /// # Performance
+    ///
+    /// This operation is O(n) as it requires rebuilding the heap without the target job.
+    pub(super) fn remove(&mut self, id: &JobId) -> Option<QueuedJob> {
+        if !self.ids.contains(id) {
+            return None;
+        }
+
+        // Remove from ID set
+        self.ids.remove(id);
+
+        // Rebuild heap without the target job
+        let jobs: Vec<QueueEntry> = std::mem::take(&mut self.heap).into_vec();
+        let (removed, remaining): (Vec<_>, Vec<_>) = jobs.into_iter().partition(|entry| entry.job.id == *id);
+
+        // Rebuild heap with remaining jobs
+        self.heap = remaining.into_iter().collect();
+
+        // Return the removed job
+        removed.into_iter().next().map(|entry| entry.job)
+    }
+
+    /// Get current queue size.
+    #[must_use]
+    #[allow(dead_code)] // May be used in future features
+    pub(super) fn len(&self) -> usize {
+        self.heap.len()
+    }
+
+    /// Check if queue is empty.
+    #[must_use]
+    #[allow(dead_code)] // May be used in future features
+    pub(super) fn is_empty(&self) -> bool {
+        self.heap.is_empty()
+    }
 }
 

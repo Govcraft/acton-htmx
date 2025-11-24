@@ -8,7 +8,9 @@ pub mod redis_agent;
 pub mod scheduled;
 
 pub use messages::{
-    EnqueueJob, GetJobStatusRequest, GetMetricsRequest, JobEnqueued, JobMetrics, ResponseChannel,
+    CancelJobRequest, ClearDeadLetterQueueRequest, EnqueueJob, GetJobStatusRequest,
+    GetMetricsRequest, JobEnqueued, JobMetrics, ResponseChannel, RetryAllFailedRequest,
+    RetryJobRequest,
 };
 #[cfg(feature = "redis")]
 pub use redis_agent::RedisPersistenceAgent;
@@ -43,6 +45,8 @@ pub struct JobAgent {
     queue: Arc<RwLock<JobQueue>>,
     /// Currently running jobs.
     running: Arc<RwLock<HashMap<JobId, JobStatus>>>,
+    /// Dead letter queue for permanently failed jobs.
+    dead_letter: Arc<RwLock<HashMap<JobId, QueuedJob>>>,
     /// Job metrics.
     metrics: Arc<RwLock<JobMetrics>>,
     /// Job execution context with services.
@@ -60,6 +64,7 @@ impl std::fmt::Debug for JobAgent {
         debug_struct
             .field("queue", &"<JobQueue>")
             .field("running", &self.running.read().len())
+            .field("dead_letter", &self.dead_letter.read().len())
             .field("metrics", &self.metrics.read())
             .field("context", &self.context);
 
@@ -86,6 +91,7 @@ impl JobAgent {
         Self {
             queue: Arc::new(RwLock::new(JobQueue::new(10_000))),
             running: Arc::new(RwLock::new(HashMap::new())),
+            dead_letter: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(JobMetrics::default())),
             context: Arc::new(JobContext::new()),
             #[cfg(feature = "redis")]
@@ -102,6 +108,7 @@ impl JobAgent {
         Self {
             queue: Arc::new(RwLock::new(JobQueue::new(10_000))),
             running: Arc::new(RwLock::new(HashMap::new())),
+            dead_letter: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(JobMetrics::default())),
             context: Arc::new(context),
             #[cfg(feature = "redis")]
@@ -144,6 +151,7 @@ impl JobAgent {
         Self {
             queue: Arc::new(RwLock::new(JobQueue::new(10_000))),
             running: Arc::new(RwLock::new(HashMap::new())),
+            dead_letter: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(JobMetrics::default())),
             context: Arc::new(context),
             redis_persistence: Some(redis_persistence),
@@ -288,6 +296,89 @@ impl JobAgent {
                 Box::pin(async move {
                     Self::send_status_response(response_tx, status).await;
                 })
+            })
+            // Retry a failed job from dead letter queue
+            .mutate_on::<RetryJobRequest>(|agent, envelope| {
+                let msg = envelope.message();
+                let response_tx = msg.response_tx.clone();
+                let job_id = msg.id;
+
+                // Try to move job from DLQ back to main queue
+                let success = agent.model.dead_letter.write().remove(&job_id)
+                    .and_then(|mut job| {
+                        // Reset attempt counter for retry
+                        job.attempt = 0;
+                        agent.model.queue.write().enqueue(job).ok()
+                    })
+                    .is_some();
+
+                AgentReply::from_async(async move {
+                    Self::send_bool_response(response_tx, success).await;
+                })
+            })
+            // Retry all failed jobs from dead letter queue
+            .mutate_on::<RetryAllFailedRequest>(|agent, envelope| {
+                let response_tx = envelope.message().response_tx.clone();
+
+                // Collect all jobs from DLQ
+                let jobs: Vec<QueuedJob> = agent.model.dead_letter.write()
+                    .drain()
+                    .map(|(_, mut job)| {
+                        // Reset attempt counter
+                        job.attempt = 0;
+                        job
+                    })
+                    .collect();
+
+                // Re-enqueue all jobs
+                let mut queue = agent.model.queue.write();
+                let mut retried = 0;
+                for job in jobs {
+                    if queue.enqueue(job).is_ok() {
+                        retried += 1;
+                    }
+                }
+
+                AgentReply::from_async(async move {
+                    Self::send_usize_response(response_tx, retried).await;
+                })
+            })
+            // Cancel a running or pending job
+            .mutate_on::<CancelJobRequest>(|agent, envelope| {
+                let msg = envelope.message();
+                let response_tx = msg.response_tx.clone();
+                let job_id = msg.id;
+
+                // Try to remove from queue first
+                let success = if agent.model.queue.write().remove(&job_id).is_some() {
+                    true
+                } else {
+                    // If not in queue, check if it's running and mark for cancellation
+                    agent.model.running.write().remove(&job_id).is_some()
+                };
+
+                AgentReply::from_async(async move {
+                    Self::send_bool_response(response_tx, success).await;
+                })
+            })
+            // Clear the dead letter queue
+            .mutate_on::<ClearDeadLetterQueueRequest>(|agent, envelope| {
+                let response_tx = envelope.message().response_tx.clone();
+
+                // Clear all jobs from DLQ
+                let count = {
+                    let mut dlq = agent.model.dead_letter.write();
+                    let count = dlq.len();
+                    dlq.clear();
+                    count
+                };
+
+                // Update metrics
+                agent.model.metrics.write().jobs_in_dlq = 0;
+
+                AgentReply::from_async(async move {
+                    Self::send_usize_response(response_tx, count).await;
+                })
             });
 
         // Redis persistence is now handled by RedisPersistenceAgent (separate agent)
@@ -319,6 +410,26 @@ impl JobAgent {
         let mut guard = response_tx.lock().await;
         if let Some(tx) = guard.take() {
             let _ = tx.send(status);
+        }
+    }
+
+    /// Send boolean response via oneshot channel.
+    ///
+    /// Helper method for web handler pattern responses (retry, cancel operations).
+    async fn send_bool_response(response_tx: ResponseChannel<bool>, success: bool) {
+        let mut guard = response_tx.lock().await;
+        if let Some(tx) = guard.take() {
+            let _ = tx.send(success);
+        }
+    }
+
+    /// Send usize response via oneshot channel.
+    ///
+    /// Helper method for web handler pattern responses (count operations).
+    async fn send_usize_response(response_tx: ResponseChannel<usize>, count: usize) {
+        let mut guard = response_tx.lock().await;
+        if let Some(tx) = guard.take() {
+            let _ = tx.send(count);
         }
     }
 }

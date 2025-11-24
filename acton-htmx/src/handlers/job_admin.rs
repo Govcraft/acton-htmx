@@ -24,7 +24,7 @@
 
 use acton_reactive::prelude::AgentHandleInterface;
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -33,7 +33,13 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::auth::{user::User, Authenticated};
-use crate::jobs::agent::GetMetricsRequest;
+use crate::jobs::{
+    agent::{
+        CancelJobRequest, ClearDeadLetterQueueRequest, GetMetricsRequest, RetryAllFailedRequest,
+        RetryJobRequest,
+    },
+    JobId,
+};
 use crate::state::ActonHtmxState;
 
 /// Response for job list endpoint
@@ -246,6 +252,323 @@ pub async fn job_stats(
     );
 
     Ok((StatusCode::OK, Json(response)).into_response())
+}
+
+/// Retry a failed job by ID
+///
+/// Re-queues a job from the dead letter queue back into the main queue
+/// for another execution attempt. Requires admin role.
+///
+/// # Example
+///
+/// ```bash
+/// POST /admin/jobs/{job_id}/retry
+/// ```
+///
+/// Response:
+/// ```json
+/// {
+///   "success": true,
+///   "message": "Job queued for retry"
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns:
+/// - `403 FORBIDDEN` if user is not an admin
+/// - `404 NOT_FOUND` if job is not in dead letter queue
+/// - `408 REQUEST_TIMEOUT` if agent doesn't respond within 100ms
+/// - `500 INTERNAL_SERVER_ERROR` if agent response channel fails
+pub async fn retry_job(
+    State(state): State<ActonHtmxState>,
+    Authenticated(admin): Authenticated<User>,
+    Path(job_id): Path<JobId>,
+) -> Result<Response, StatusCode> {
+    // Verify admin role
+    if !admin.roles.contains(&"admin".to_string()) {
+        tracing::warn!(
+            admin_id = admin.id,
+            %job_id,
+            "Non-admin attempted to retry job"
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Create request with response channel
+    let (request, rx) = RetryJobRequest::new(job_id);
+
+    // Send message to JobAgent
+    state.job_agent().send(request).await;
+
+    // Await response with 100ms timeout
+    let timeout = Duration::from_millis(100);
+    let success = tokio::time::timeout(timeout, rx)
+        .await
+        .map_err(|_| {
+            tracing::error!(%job_id, "Job retry timeout");
+            StatusCode::REQUEST_TIMEOUT
+        })?
+        .map_err(|_| {
+            tracing::error!(%job_id, "Job retry channel error");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if success {
+        tracing::info!(
+            admin_id = admin.id,
+            %job_id,
+            "Job queued for retry"
+        );
+
+        Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": "Job queued for retry"
+            })),
+        )
+            .into_response())
+    } else {
+        tracing::warn!(
+            admin_id = admin.id,
+            %job_id,
+            "Job not found in dead letter queue"
+        );
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+/// Retry all failed jobs
+///
+/// Re-queues all jobs from the dead letter queue back into the main queue.
+/// Requires admin role.
+///
+/// # Example
+///
+/// ```bash
+/// POST /admin/jobs/retry-all
+/// ```
+///
+/// Response:
+/// ```json
+/// {
+///   "retried": 5,
+///   "message": "5 jobs queued for retry"
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns:
+/// - `403 FORBIDDEN` if user is not an admin
+/// - `408 REQUEST_TIMEOUT` if agent doesn't respond within 500ms
+/// - `500 INTERNAL_SERVER_ERROR` if agent response channel fails
+pub async fn retry_all_jobs(
+    State(state): State<ActonHtmxState>,
+    Authenticated(admin): Authenticated<User>,
+) -> Result<Response, StatusCode> {
+    // Verify admin role
+    if !admin.roles.contains(&"admin".to_string()) {
+        tracing::warn!(
+            admin_id = admin.id,
+            "Non-admin attempted to retry all jobs"
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Create request with response channel
+    let (request, rx) = RetryAllFailedRequest::new();
+
+    // Send message to JobAgent
+    state.job_agent().send(request).await;
+
+    // Await response with 500ms timeout (may need to requeue many jobs)
+    let timeout = Duration::from_millis(500);
+    let retried = tokio::time::timeout(timeout, rx)
+        .await
+        .map_err(|_| {
+            tracing::error!("Retry all jobs timeout");
+            StatusCode::REQUEST_TIMEOUT
+        })?
+        .map_err(|_| {
+            tracing::error!("Retry all jobs channel error");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    tracing::info!(
+        admin_id = admin.id,
+        retried,
+        "All failed jobs queued for retry"
+    );
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "retried": retried,
+            "message": format!("{retried} jobs queued for retry")
+        })),
+    )
+        .into_response())
+}
+
+/// Cancel a running or pending job
+///
+/// Attempts to cancel a job. If the job is pending, it's removed from the queue.
+/// If it's currently running, a cancellation signal is sent.
+/// Requires admin role.
+///
+/// # Example
+///
+/// ```bash
+/// POST /admin/jobs/{job_id}/cancel
+/// ```
+///
+/// Response:
+/// ```json
+/// {
+///   "success": true,
+///   "message": "Job cancellation requested"
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns:
+/// - `403 FORBIDDEN` if user is not an admin
+/// - `404 NOT_FOUND` if job is not found
+/// - `408 REQUEST_TIMEOUT` if agent doesn't respond within 100ms
+/// - `500 INTERNAL_SERVER_ERROR` if agent response channel fails
+pub async fn cancel_job(
+    State(state): State<ActonHtmxState>,
+    Authenticated(admin): Authenticated<User>,
+    Path(job_id): Path<JobId>,
+) -> Result<Response, StatusCode> {
+    // Verify admin role
+    if !admin.roles.contains(&"admin".to_string()) {
+        tracing::warn!(
+            admin_id = admin.id,
+            %job_id,
+            "Non-admin attempted to cancel job"
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Create request with response channel
+    let (request, rx) = CancelJobRequest::new(job_id);
+
+    // Send message to JobAgent
+    state.job_agent().send(request).await;
+
+    // Await response with 100ms timeout
+    let timeout = Duration::from_millis(100);
+    let success = tokio::time::timeout(timeout, rx)
+        .await
+        .map_err(|_| {
+            tracing::error!(%job_id, "Job cancel timeout");
+            StatusCode::REQUEST_TIMEOUT
+        })?
+        .map_err(|_| {
+            tracing::error!(%job_id, "Job cancel channel error");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if success {
+        tracing::info!(
+            admin_id = admin.id,
+            %job_id,
+            "Job cancellation requested"
+        );
+
+        Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": "Job cancellation requested"
+            })),
+        )
+            .into_response())
+    } else {
+        tracing::warn!(
+            admin_id = admin.id,
+            %job_id,
+            "Job not found"
+        );
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+/// Clear the dead letter queue
+///
+/// Permanently removes all jobs from the dead letter queue.
+/// This operation cannot be undone. Requires admin role.
+///
+/// # Example
+///
+/// ```bash
+/// POST /admin/jobs/dead-letter/clear
+/// ```
+///
+/// Response:
+/// ```json
+/// {
+///   "cleared": 3,
+///   "message": "3 jobs removed from dead letter queue"
+/// }
+/// ```
+///
+/// # Errors
+///
+/// Returns:
+/// - `403 FORBIDDEN` if user is not an admin
+/// - `408 REQUEST_TIMEOUT` if agent doesn't respond within 100ms
+/// - `500 INTERNAL_SERVER_ERROR` if agent response channel fails
+pub async fn clear_dead_letter_queue(
+    State(state): State<ActonHtmxState>,
+    Authenticated(admin): Authenticated<User>,
+) -> Result<Response, StatusCode> {
+    // Verify admin role
+    if !admin.roles.contains(&"admin".to_string()) {
+        tracing::warn!(
+            admin_id = admin.id,
+            "Non-admin attempted to clear dead letter queue"
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Create request with response channel
+    let (request, rx) = ClearDeadLetterQueueRequest::new();
+
+    // Send message to JobAgent
+    state.job_agent().send(request).await;
+
+    // Await response with 100ms timeout
+    let timeout = Duration::from_millis(100);
+    let cleared = tokio::time::timeout(timeout, rx)
+        .await
+        .map_err(|_| {
+            tracing::error!("Clear dead letter queue timeout");
+            StatusCode::REQUEST_TIMEOUT
+        })?
+        .map_err(|_| {
+            tracing::error!("Clear dead letter queue channel error");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    tracing::info!(
+        admin_id = admin.id,
+        cleared,
+        "Dead letter queue cleared"
+    );
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "cleared": cleared,
+            "message": format!("{cleared} jobs removed from dead letter queue")
+        })),
+    )
+        .into_response())
 }
 
 #[cfg(test)]

@@ -8,6 +8,63 @@ use serde::Deserialize;
 static SUCCESS: Emoji = Emoji("✓", "√");
 static INFO: Emoji = Emoji("ℹ", "i");
 
+#[derive(Deserialize)]
+struct JobListResponse {
+    jobs: Vec<JobInfo>,
+    total: usize,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct JobInfo {
+    id: String,
+    job_type: String,
+    status: String,
+    created_at: String,
+    priority: i32,
+}
+
+#[derive(Deserialize)]
+struct JobStats {
+    total_enqueued: u64,
+    running: usize,
+    pending: usize,
+    completed: u64,
+    failed: u64,
+    dead_letter: u64,
+    avg_execution_ms: f64,
+    p95_execution_ms: f64,
+    p99_execution_ms: f64,
+    success_rate: f64,
+    #[allow(dead_code)] // Used for future features
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct RetryAllResponse {
+    #[allow(dead_code)] // Used in CLI output conditionally
+    retried: usize,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct ClearResponse {
+    #[allow(dead_code)] // Used in CLI output conditionally
+    cleared: usize,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct WatchJobStats {
+    running: usize,
+    pending: usize,
+    completed: u64,
+    failed: u64,
+    dead_letter: u64,
+    avg_execution_ms: f64,
+    success_rate: f64,
+}
+
 /// Job management commands
 #[derive(Debug, Subcommand)]
 pub enum JobsCommand {
@@ -96,22 +153,6 @@ impl JobsCommand {
     }
 
     fn list(status: Option<&str>, _limit: usize) {
-        #[derive(Deserialize)]
-        struct JobListResponse {
-            jobs: Vec<JobInfo>,
-            total: usize,
-            message: String,
-        }
-
-        #[derive(Deserialize)]
-        struct JobInfo {
-            id: String,
-            job_type: String,
-            status: String,
-            created_at: String,
-            priority: i32,
-        }
-
         println!("\n{INFO} Job Queue");
         println!();
 
@@ -185,22 +226,6 @@ impl JobsCommand {
     }
 
     fn stats() {
-        #[derive(Deserialize)]
-        struct JobStats {
-            total_enqueued: u64,
-            running: usize,
-            pending: usize,
-            completed: u64,
-            failed: u64,
-            dead_letter: u64,
-            avg_execution_ms: f64,
-            p95_execution_ms: f64,
-            p99_execution_ms: f64,
-            success_rate: f64,
-            #[allow(dead_code)] // Used for future features
-            message: String,
-        }
-
         println!("\n{INFO} Job Statistics");
         println!();
 
@@ -269,10 +294,27 @@ impl JobsCommand {
     fn retry(job_id: &str) {
         println!("{INFO} Retrying job: {}", style(job_id).cyan());
 
-        // TODO: Call job service to retry job
-        println!("  {}", style("(Job service not connected)").dim());
-        println!();
-        println!("{SUCCESS} Job retry queued successfully");
+        // Call job service API to retry job
+        let base_url = std::env::var("ACTON_HTMX_API_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let url = format!("{base_url}/admin/jobs/{job_id}/retry");
+
+        match ureq::post(&url).send(&[]) {
+            Ok(_response) => {
+                println!();
+                println!("{SUCCESS} Job retry queued successfully");
+            }
+            Err(e) if e.to_string().contains("404") => {
+                println!();
+                println!("  {} Job not found in dead letter queue", style("Error:").red());
+                println!("{INFO} Only failed jobs in the dead letter queue can be retried.");
+            }
+            Err(e) => {
+                println!("  {} Failed to retry job: {}", style("Error:").red(), e);
+                println!();
+                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+            }
+        }
     }
 
     fn retry_all(force: bool) -> Result<()> {
@@ -293,10 +335,27 @@ impl JobsCommand {
 
         println!("{INFO} Retrying all failed jobs...");
 
-        // TODO: Call job service to retry all failed jobs
-        println!("  {}", style("(Job service not connected)").dim());
-        println!();
-        println!("{SUCCESS} All failed jobs queued for retry");
+        // Call job service API to retry all failed jobs
+        let base_url = std::env::var("ACTON_HTMX_API_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let url = format!("{base_url}/admin/jobs/retry-all");
+
+        match ureq::post(&url).send(&[]) {
+            Ok(response) => {
+                let body = response.into_body().read_to_string()?;
+                println!();
+                if let Ok(result) = serde_json::from_str::<RetryAllResponse>(&body) {
+                    println!("{SUCCESS} {}", result.message);
+                } else {
+                    println!("{SUCCESS} All failed jobs queued for retry");
+                }
+            }
+            Err(e) => {
+                println!("  {} Failed to retry jobs: {}", style("Error:").red(), e);
+                println!();
+                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+            }
+        }
 
         Ok(())
     }
@@ -304,11 +363,28 @@ impl JobsCommand {
     fn cancel(job_id: &str) {
         println!("{INFO} Cancelling job: {}", style(job_id).cyan());
 
-        // TODO: Call job service to cancel job
-        println!("  {}", style("(Job service not connected)").dim());
-        println!();
-        println!("{SUCCESS} Job cancellation requested");
-        println!("  {INFO} Graceful shutdown in progress. Job will stop at next checkpoint.");
+        // Call job service API to cancel job
+        let base_url = std::env::var("ACTON_HTMX_API_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let url = format!("{base_url}/admin/jobs/{job_id}/cancel");
+
+        match ureq::post(&url).send(&[]) {
+            Ok(_response) => {
+                println!();
+                println!("{SUCCESS} Job cancellation requested");
+                println!("  {INFO} If job is running, it will stop at next checkpoint.");
+            }
+            Err(e) if e.to_string().contains("404") => {
+                println!();
+                println!("  {} Job not found", style("Error:").red());
+                println!("{INFO} Job may have already completed or does not exist.");
+            }
+            Err(e) => {
+                println!("  {} Failed to cancel job: {}", style("Error:").red(), e);
+                println!();
+                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+            }
+        }
     }
 
     fn clear_dead_letter(force: bool) -> Result<()> {
@@ -332,10 +408,27 @@ impl JobsCommand {
 
         println!("{INFO} Clearing dead letter queue...");
 
-        // TODO: Call job service to clear DLQ
-        println!("  {}", style("(Job service not connected)").dim());
-        println!();
-        println!("{SUCCESS} Dead letter queue cleared");
+        // Call job service API to clear dead letter queue
+        let base_url = std::env::var("ACTON_HTMX_API_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let url = format!("{base_url}/admin/jobs/dead-letter/clear");
+
+        match ureq::post(&url).send(&[]) {
+            Ok(response) => {
+                let body = response.into_body().read_to_string()?;
+                println!();
+                if let Ok(result) = serde_json::from_str::<ClearResponse>(&body) {
+                    println!("{SUCCESS} {}", result.message);
+                } else {
+                    println!("{SUCCESS} Dead letter queue cleared");
+                }
+            }
+            Err(e) => {
+                println!("  {} Failed to clear queue: {}", style("Error:").red(), e);
+                println!();
+                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+            }
+        }
 
         Ok(())
     }
@@ -349,6 +442,9 @@ impl JobsCommand {
         println!("  Update interval: {interval} seconds");
         println!();
 
+        let base_url = std::env::var("ACTON_HTMX_API_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_string());
+
         loop {
             // Clear screen
             print!("\x1B[2J\x1B[1;1H");
@@ -359,14 +455,39 @@ impl JobsCommand {
             println!("{}", "=".repeat(80));
             println!();
 
-            // TODO: Fetch and display real-time stats
-            println!("{}", style("Queue Status").bold().underlined());
-            println!("  Running:   {}", style("0").yellow());
-            println!("  Pending:   {}", style("0").blue());
-            println!("  Completed: {}", style("0").green());
-            println!("  Failed:    {}", style("0").red());
-            println!();
+            // Fetch and display real-time stats
+            let url = format!("{base_url}/admin/jobs/stats");
 
+            if let Ok(response) = ureq::get(&url).call() {
+                if let Ok(body) = response.into_body().read_to_string() {
+                    if let Ok(stats) = serde_json::from_str::<WatchJobStats>(&body) {
+                        println!("{}", style("Queue Status").bold().underlined());
+                        println!("  Running:     {}", style(stats.running).yellow());
+                        println!("  Pending:     {}", style(stats.pending).blue());
+                        println!("  Completed:   {}", style(stats.completed).green());
+                        println!("  Failed:      {}", style(stats.failed).red());
+                        println!("  Dead Letter: {}", style(stats.dead_letter).red());
+                        println!();
+
+                        println!("{}", style("Performance").bold().underlined());
+                        println!(
+                            "  Avg Exec:    {} ms",
+                            style(format!("{:.2}", stats.avg_execution_ms)).cyan()
+                        );
+                        println!(
+                            "  Success:     {}%",
+                            style(format!("{:.1}", stats.success_rate)).green()
+                        );
+                    }
+                }
+            } else {
+                println!("{}", style("Queue Status").bold().underlined());
+                println!("  {}", style("Unable to connect to job service").red());
+                println!();
+                println!("  Make sure your application is running at {}", style(&base_url).cyan());
+            }
+
+            println!();
             println!(
                 "{}",
                 style(format!("Last updated: {}", chrono::Local::now().format("%H:%M:%S")))

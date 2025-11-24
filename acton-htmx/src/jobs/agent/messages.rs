@@ -242,3 +242,179 @@ impl GetJobStatusRequest {
         (request, rx)
     }
 }
+
+/// Retry a failed job (web handler pattern).
+///
+/// Re-queues a job from the dead letter queue back into the main queue
+/// for another execution attempt.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use acton_htmx::jobs::agent::messages::RetryJobRequest;
+///
+/// async fn handler(
+///     State(state): State<ActonHtmxState>,
+///     Path(job_id): Path<JobId>,
+/// ) -> Result<Response> {
+///     let (request, rx) = RetryJobRequest::new(job_id);
+///     state.job_agent().send(request).await;
+///
+///     let success = tokio::time::timeout(Duration::from_millis(100), rx).await??;
+///     Ok(if success {
+///         StatusCode::OK
+///     } else {
+///         StatusCode::NOT_FOUND
+///     }.into_response())
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct RetryJobRequest {
+    /// Job ID to retry.
+    pub id: JobId,
+    /// Response channel indicating success.
+    pub response_tx: ResponseChannel<bool>,
+}
+
+impl RetryJobRequest {
+    /// Create a new retry job request with response channel.
+    ///
+    /// Returns a tuple of (request, receiver) where the request should be
+    /// sent to the agent and the receiver awaited for the response.
+    #[must_use]
+    pub fn new(id: JobId) -> (Self, oneshot::Receiver<bool>) {
+        let (tx, rx) = oneshot::channel();
+        let request = Self {
+            id,
+            response_tx: Arc::new(Mutex::new(Some(tx))),
+        };
+        (request, rx)
+    }
+}
+
+/// Retry all failed jobs (web handler pattern).
+///
+/// Re-queues all jobs from the dead letter queue back into the main queue.
+/// Returns the number of jobs successfully retried.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use acton_htmx::jobs::agent::messages::RetryAllFailedRequest;
+///
+/// async fn handler(State(state): State<ActonHtmxState>) -> Result<Response> {
+///     let (request, rx) = RetryAllFailedRequest::new();
+///     state.job_agent().send(request).await;
+///
+///     let count = tokio::time::timeout(Duration::from_millis(500), rx).await??;
+///     Ok(Json(json!({ "retried": count })).into_response())
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct RetryAllFailedRequest {
+    /// Response channel with count of retried jobs.
+    pub response_tx: ResponseChannel<usize>,
+}
+
+impl RetryAllFailedRequest {
+    /// Create a new retry all failed request with response channel.
+    ///
+    /// Returns a tuple of (request, receiver) where the request should be
+    /// sent to the agent and the receiver awaited for the response.
+    #[must_use]
+    pub fn new() -> (Self, oneshot::Receiver<usize>) {
+        let (tx, rx) = oneshot::channel();
+        let request = Self {
+            response_tx: Arc::new(Mutex::new(Some(tx))),
+        };
+        (request, rx)
+    }
+}
+
+/// Cancel a running or pending job (web handler pattern).
+///
+/// Attempts to cancel a job. If the job is pending, it's removed from the queue.
+/// If it's currently running, a cancellation signal is sent.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use acton_htmx::jobs::agent::messages::CancelJobRequest;
+///
+/// async fn handler(
+///     State(state): State<ActonHtmxState>,
+///     Path(job_id): Path<JobId>,
+/// ) -> Result<Response> {
+///     let (request, rx) = CancelJobRequest::new(job_id);
+///     state.job_agent().send(request).await;
+///
+///     let success = tokio::time::timeout(Duration::from_millis(100), rx).await??;
+///     Ok(if success {
+///         StatusCode::OK
+///     } else {
+///         StatusCode::NOT_FOUND
+///     }.into_response())
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct CancelJobRequest {
+    /// Job ID to cancel.
+    pub id: JobId,
+    /// Response channel indicating success.
+    pub response_tx: ResponseChannel<bool>,
+}
+
+impl CancelJobRequest {
+    /// Create a new cancel job request with response channel.
+    ///
+    /// Returns a tuple of (request, receiver) where the request should be
+    /// sent to the agent and the receiver awaited for the response.
+    #[must_use]
+    pub fn new(id: JobId) -> (Self, oneshot::Receiver<bool>) {
+        let (tx, rx) = oneshot::channel();
+        let request = Self {
+            id,
+            response_tx: Arc::new(Mutex::new(Some(tx))),
+        };
+        (request, rx)
+    }
+}
+
+/// Clear the dead letter queue (web handler pattern).
+///
+/// Permanently removes all jobs from the dead letter queue.
+/// This operation cannot be undone.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use acton_htmx::jobs::agent::messages::ClearDeadLetterQueueRequest;
+///
+/// async fn handler(State(state): State<ActonHtmxState>) -> Result<Response> {
+///     let (request, rx) = ClearDeadLetterQueueRequest::new();
+///     state.job_agent().send(request).await;
+///
+///     let count = tokio::time::timeout(Duration::from_millis(100), rx).await??;
+///     Ok(Json(json!({ "cleared": count })).into_response())
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct ClearDeadLetterQueueRequest {
+    /// Response channel with count of cleared jobs.
+    pub response_tx: ResponseChannel<usize>,
+}
+
+impl ClearDeadLetterQueueRequest {
+    /// Create a new clear dead letter queue request with response channel.
+    ///
+    /// Returns a tuple of (request, receiver) where the request should be
+    /// sent to the agent and the receiver awaited for the response.
+    #[must_use]
+    pub fn new() -> (Self, oneshot::Receiver<usize>) {
+        let (tx, rx) = oneshot::channel();
+        let request = Self {
+            response_tx: Arc::new(Mutex::new(Some(tx))),
+        };
+        (request, rx)
+    }
+}
