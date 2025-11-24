@@ -7,7 +7,7 @@
 //! - Security headers (automatic security header injection)
 //! - File serving (range requests, caching, access control)
 //! - Cedar authorization (policy-based access control, requires cedar feature)
-//! - Rate limiting (TODO)
+//! - Rate limiting (Redis-backed or in-memory, per-user/IP/route limits)
 
 pub mod auth;
 #[cfg(feature = "cedar")]
@@ -16,6 +16,7 @@ pub mod cedar;
 pub mod cedar_template;
 pub mod csrf;
 pub mod file_serving;
+pub mod rate_limit;
 pub mod security_headers;
 pub mod session;
 
@@ -36,6 +37,8 @@ pub use csrf::{
 pub use file_serving::{
     serve_file, FileAccessControl, FileServingError, FileServingMiddleware,
 };
+#[allow(unused_imports)]
+pub use rate_limit::{RateLimit, RateLimitError};
 #[allow(unused_imports)]
 pub use security_headers::{
     FrameOptions, HstsConfig, ReferrerPolicy, SecurityHeadersConfig, SecurityHeadersLayer,

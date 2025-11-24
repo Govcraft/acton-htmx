@@ -140,6 +140,9 @@ pub struct SecuritySettings {
 
     /// Enable security headers middleware
     pub security_headers_enabled: bool,
+
+    /// Rate limiting configuration
+    pub rate_limit: RateLimitConfig,
 }
 
 impl Default for SecuritySettings {
@@ -150,6 +153,7 @@ impl Default for SecuritySettings {
             secure_cookies: !cfg!(debug_assertions),
             same_site: SameSitePolicy::Lax,
             security_headers_enabled: true,
+            rate_limit: RateLimitConfig::default(),
         }
     }
 }
@@ -164,6 +168,93 @@ pub enum SameSitePolicy {
     Lax,
     /// None `SameSite` policy (requires secure cookies)
     None,
+}
+
+/// Rate limiting configuration
+///
+/// Supports both Redis-backed (distributed) and in-memory (single instance) rate limiting.
+/// Rate limits can be configured per authenticated user, per IP address, and per specific route patterns.
+///
+/// # Example Configuration
+///
+/// ```toml
+/// [security.rate_limit]
+/// enabled = true
+/// per_user_rpm = 120           # 120 requests per minute for authenticated users
+/// per_ip_rpm = 60              # 60 requests per minute per IP address
+/// per_route_rpm = 30           # 30 requests per minute for specific routes (e.g., auth)
+/// window_secs = 60             # Rate limit window (60 seconds)
+/// redis_enabled = true         # Use Redis for distributed rate limiting
+/// failure_mode = "closed"      # Deny on rate limit errors (strict)
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RateLimitConfig {
+    /// Enable rate limiting middleware
+    pub enabled: bool,
+
+    /// Requests per minute per authenticated user
+    pub per_user_rpm: u32,
+
+    /// Requests per minute per IP address (for anonymous requests)
+    pub per_ip_rpm: u32,
+
+    /// Requests per minute for specific routes (e.g., auth endpoints)
+    pub per_route_rpm: u32,
+
+    /// Rate limit window in seconds
+    pub window_secs: u64,
+
+    /// Use Redis for distributed rate limiting (requires cache feature)
+    /// Falls back to in-memory if Redis is unavailable
+    pub redis_enabled: bool,
+
+    /// Failure mode when rate limit backend fails
+    /// - Closed: Deny requests when rate limiting fails (strict, production)
+    /// - Open: Allow requests when rate limiting fails (permissive, development)
+    pub failure_mode: RateLimitFailureMode,
+
+    /// Route patterns that should use stricter rate limits (e.g., `"/login"`, `"/register"`)
+    pub strict_routes: Vec<String>,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            per_user_rpm: 120,
+            per_ip_rpm: 60,
+            per_route_rpm: 30,
+            window_secs: 60,
+            redis_enabled: cfg!(feature = "redis"),
+            failure_mode: RateLimitFailureMode::default(),
+            strict_routes: vec![
+                "/login".to_string(),
+                "/register".to_string(),
+                "/password-reset".to_string(),
+            ],
+        }
+    }
+}
+
+/// Failure mode for rate limit backend errors
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RateLimitFailureMode {
+    /// Deny requests when rate limiting fails (strict, production)
+    Closed,
+    /// Allow requests when rate limiting fails (permissive, development)
+    Open,
+}
+
+impl Default for RateLimitFailureMode {
+    fn default() -> Self {
+        if cfg!(debug_assertions) {
+            Self::Open
+        } else {
+            Self::Closed
+        }
+    }
 }
 
 /// Failure mode for Cedar policy evaluation errors
