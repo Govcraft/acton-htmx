@@ -231,7 +231,10 @@ fn serve_range_request(
         .split_once('-')
         .ok_or(FileServingError::InvalidRange)?;
 
-    let start: usize = if start_str.is_empty() {
+    // Check if this is a suffix range (e.g., "bytes=-500")
+    let is_suffix_range = start_str.is_empty();
+
+    let start: usize = if is_suffix_range {
         // Suffix range: -500 means last 500 bytes
         let suffix_len: usize = end_str
             .parse()
@@ -243,10 +246,14 @@ fn serve_range_request(
             .map_err(|_| FileServingError::InvalidRange)?
     };
 
-    let end: usize = if end_str.is_empty() {
+    let end: usize = if is_suffix_range {
+        // Suffix range always goes to the end of the file
+        file_size - 1
+    } else if end_str.is_empty() {
         // Open-ended range: 500- means from byte 500 to end
         file_size - 1
     } else {
+        // Normal range with explicit end
         end_str
             .parse::<usize>()
             .map_err(|_| FileServingError::InvalidRange)?
@@ -468,10 +475,497 @@ mod tests {
         assert_eq!(content_type, "application/octet-stream");
     }
 
-    // TODO: Implement comprehensive range request tests
-    // - Full range: "bytes=0-499"
-    // - Suffix range: "bytes=-500" (last 500 bytes)
-    // - Open-ended: "bytes=500-" (from 500 to end)
-    // - Invalid ranges
-    // - Multi-range (not currently supported)
+    #[tokio::test]
+    async fn test_range_request_full_range() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        // Create test file with 1000 bytes (repeating 0-255 pattern)
+        let data = (0_u8..=255).cycle().take(1000).collect::<Vec<u8>>();
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data.clone());
+        let stored = storage.store(file).await.unwrap();
+
+        // Request bytes 100-199 (100 bytes)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=100-199"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Verify 206 Partial Content status
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        // Verify Content-Range header
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 100-199/1000");
+
+        // Verify Content-Length
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "100");
+
+        // Verify ETag is present
+        assert!(response.headers().contains_key(ETAG));
+
+        // Verify Accept-Ranges header
+        assert_eq!(
+            response.headers().get(ACCEPT_RANGES).unwrap(),
+            "bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_range_request_suffix_range() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        // Create test file with 1000 bytes (repeating 0-255 pattern)
+        let data = (0_u8..=255).cycle().take(1000).collect::<Vec<u8>>();
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data.clone());
+        let stored = storage.store(file).await.unwrap();
+
+        // Request last 100 bytes (bytes=-100)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=-100"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Verify 206 Partial Content status
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        // Verify Content-Range header (last 100 bytes: 900-999)
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 900-999/1000");
+
+        // Verify Content-Length
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "100");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_suffix_range_exceeds_file_size() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        // Create small file (100 bytes)
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data.clone());
+        let stored = storage.store(file).await.unwrap();
+
+        // Request last 500 bytes (more than file size)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=-500"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Should return entire file (saturating_sub returns 0)
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 0-99/100");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_open_ended() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        // Create test file with 1000 bytes (repeating 0-255 pattern)
+        let data = (0_u8..=255).cycle().take(1000).collect::<Vec<u8>>();
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data.clone());
+        let stored = storage.store(file).await.unwrap();
+
+        // Request from byte 800 to end (bytes=800-)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=800-"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Verify 206 Partial Content status
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        // Verify Content-Range header (bytes 800-999)
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 800-999/1000");
+
+        // Verify Content-Length
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "200");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_single_byte() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Request single byte at position 50
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=50-50"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 50-50/100");
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "1");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_invalid_format_no_bytes_prefix() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Invalid: missing "bytes=" prefix
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("0-99"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers).await;
+
+        // Should return InvalidRange error
+        assert!(response.is_err());
+        let err = response.unwrap_err();
+        assert!(matches!(err, FileServingError::InvalidRange));
+    }
+
+    #[tokio::test]
+    async fn test_range_request_invalid_format_no_dash() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Invalid: no dash separator
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=50"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers).await;
+
+        assert!(response.is_err());
+        let err = response.unwrap_err();
+        assert!(matches!(err, FileServingError::InvalidRange));
+    }
+
+    #[tokio::test]
+    async fn test_range_request_invalid_non_numeric() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Invalid: non-numeric values
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=abc-def"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers).await;
+
+        assert!(response.is_err());
+        let err = response.unwrap_err();
+        assert!(matches!(err, FileServingError::InvalidRange));
+    }
+
+    #[tokio::test]
+    async fn test_range_request_start_greater_than_end() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Invalid: start > end
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=50-20"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers).await;
+
+        // Should return RangeNotSatisfiable
+        assert!(response.is_err());
+        let err = response.unwrap_err();
+        assert!(matches!(err, FileServingError::RangeNotSatisfiable(100)));
+    }
+
+    #[tokio::test]
+    async fn test_range_request_start_beyond_file_size() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Invalid: start >= file size
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=100-199"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers).await;
+
+        // Should return RangeNotSatisfiable
+        assert!(response.is_err());
+        let err = response.unwrap_err();
+        assert!(matches!(err, FileServingError::RangeNotSatisfiable(100)));
+    }
+
+    #[tokio::test]
+    async fn test_range_request_end_exceeds_file_size() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // End exceeds file size (should be clamped to file size - 1)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=50-200"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        // End should be clamped to 99 (file size - 1)
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 50-99/100");
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "50");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_with_if_range_matching_etag() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // First request to get ETag
+        let headers = HeaderMap::new();
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+        let etag = response.headers().get(ETAG).unwrap().clone();
+
+        // Range request with matching If-Range (should serve range)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=0-49"));
+        headers.insert(IF_RANGE, etag);
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Should serve partial content
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 0-49/100");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_with_if_range_non_matching_etag() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Range request with non-matching If-Range (should serve full file)
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=0-49"));
+        headers.insert(IF_RANGE, HeaderValue::from_static("\"wrong-etag\""));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Should serve full file with 200 OK (not 206)
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!response.headers().contains_key(CONTENT_RANGE));
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "100");
+    }
+
+    #[tokio::test]
+    async fn test_range_not_satisfiable_error_includes_content_range_header() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Request beyond file size
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=200-299"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers).await;
+
+        assert!(response.is_err());
+        let err = response.unwrap_err();
+
+        // Convert to response and verify headers
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+
+        // Should include Content-Range with file size
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes */100");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_preserves_cache_headers() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=0-49"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Verify cache headers are present in range responses
+        assert!(response.headers().contains_key(ETAG));
+        assert!(response.headers().contains_key(CACHE_CONTROL));
+        assert!(response.headers().contains_key(LAST_MODIFIED));
+    }
+
+    #[tokio::test]
+    async fn test_no_range_header_serves_full_file() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // No Range header - should serve full file
+        let headers = HeaderMap::new();
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(!response.headers().contains_key(CONTENT_RANGE));
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "100");
+
+        // Should still advertise range support
+        assert_eq!(
+            response.headers().get(ACCEPT_RANGES).unwrap(),
+            "bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_range_request_first_byte() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Request first byte only
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=0-0"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 0-0/100");
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "1");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_last_byte() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Request last byte only
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=99-99"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 99-99/100");
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "1");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_entire_file_as_range() {
+        let temp = TempDir::new().unwrap();
+        let storage = Arc::new(LocalFileStorage::new(temp.path().to_path_buf()).unwrap());
+
+        let data = vec![42u8; 100];
+        let file = UploadedFile::new("test.bin", "application/octet-stream", data);
+        let stored = storage.store(file).await.unwrap();
+
+        // Request entire file as range
+        let mut headers = HeaderMap::new();
+        headers.insert(RANGE, HeaderValue::from_static("bytes=0-99"));
+
+        let response = serve_file(State(storage.clone()), Path(stored.id.clone()), headers)
+            .await
+            .unwrap();
+
+        // Should still return 206 Partial Content (RFC 7233)
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+
+        let content_range = response.headers().get(CONTENT_RANGE).unwrap();
+        assert_eq!(content_range, "bytes 0-99/100");
+
+        let content_length = response.headers().get(CONTENT_LENGTH).unwrap();
+        assert_eq!(content_length, "100");
+    }
 }
