@@ -38,7 +38,7 @@ fn test_oauth_config() -> OAuthConfig {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_state_token_generation() {
     let mut runtime = ActonApp::launch();
     let oauth2_agent = OAuth2Agent::spawn(&mut runtime)
@@ -59,7 +59,7 @@ async fn test_oauth_state_token_generation() {
     runtime.shutdown_all().await.ok();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_state_token_validation() {
     let mut runtime = ActonApp::launch();
     let oauth2_agent = OAuth2Agent::spawn(&mut runtime)
@@ -88,7 +88,7 @@ async fn test_oauth_state_token_validation() {
     runtime.shutdown_all().await.ok();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_state_token_validation_fails_for_invalid_token() {
     let mut runtime = ActonApp::launch();
     let oauth2_agent = OAuth2Agent::spawn(&mut runtime)
@@ -109,7 +109,7 @@ async fn test_oauth_state_token_validation_fails_for_invalid_token() {
     runtime.shutdown_all().await.ok();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_state_token_one_time_use() {
     let mut runtime = ActonApp::launch();
     let oauth2_agent = OAuth2Agent::spawn(&mut runtime)
@@ -148,7 +148,7 @@ async fn test_oauth_state_token_one_time_use() {
     runtime.shutdown_all().await.ok();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_state_cleanup_expired_tokens() {
     let mut runtime = ActonApp::launch();
     let oauth2_agent = OAuth2Agent::spawn(&mut runtime)
@@ -183,7 +183,7 @@ async fn test_oauth_state_cleanup_expired_tokens() {
     runtime.shutdown_all().await.ok();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_provider_config_from_config() {
     let oauth_config = test_oauth_config();
 
@@ -214,7 +214,7 @@ async fn test_oauth_provider_config_from_config() {
     assert!(oidc_result.is_err());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_oauth_multiple_state_tokens_can_coexist() {
     let mut runtime = ActonApp::launch();
     let oauth2_agent = OAuth2Agent::spawn(&mut runtime)

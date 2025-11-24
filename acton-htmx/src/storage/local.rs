@@ -159,12 +159,15 @@ impl FileStorage for LocalFileStorage {
         // Read the first non-hidden file in the directory
         while let Some(entry) = entries.next_entry().await? {
             let file_path = entry.path();
-            if file_path.is_file() {
-                // Skip hidden files (like .metadata.json)
-                if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
-                    if !name.starts_with('.') {
-                        let data = fs::read(&file_path).await?;
-                        return Ok(data);
+            // Use async metadata check
+            if let Ok(metadata) = entry.metadata().await {
+                if metadata.is_file() {
+                    // Skip hidden files (like .metadata.json)
+                    if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
+                        if !name.starts_with('.') {
+                            let data = fs::read(&file_path).await?;
+                            return Ok(data);
+                        }
                     }
                 }
             }
@@ -198,17 +201,20 @@ impl FileStorage for LocalFileStorage {
         // Find the first non-hidden file
         while let Some(entry) = entries.next_entry().await? {
             let file_path = entry.path();
-            if file_path.is_file() {
-                // Skip hidden files (like .metadata.json)
-                let filename = file_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .ok_or_else(|| StorageError::InvalidPath(format!("Invalid filename in {id}")))?;
+            // Use async metadata check
+            if let Ok(metadata) = entry.metadata().await {
+                if metadata.is_file() {
+                    // Skip hidden files (like .metadata.json)
+                    let filename = file_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .ok_or_else(|| StorageError::InvalidPath(format!("Invalid filename in {id}")))?;
 
-                if !filename.starts_with('.') {
-                    // Use first 2 chars as prefix
-                    let prefix = &id[..2.min(id.len())];
-                    return Ok(format!("/uploads/{prefix}/{id}/{filename}"));
+                    if !filename.starts_with('.') {
+                        // Use first 2 chars as prefix
+                        let prefix = &id[..2.min(id.len())];
+                        return Ok(format!("/uploads/{prefix}/{id}/{filename}"));
+                    }
                 }
             }
         }
