@@ -8,7 +8,7 @@
 //! ```rust,no_run
 //! use acton_htmx::middleware::AuthMiddleware;
 //! use acton_htmx::auth::Authenticated;
-//! use axum::{Router, routing::get, middleware, extract::State};
+//! use axum::{Router, routing::get, middleware};
 //!
 //! async fn protected_handler(
 //!     Authenticated(user): Authenticated<acton_htmx::auth::User>,
@@ -17,9 +17,18 @@
 //! }
 //!
 //! # async fn example() {
+//! // Default login path (/login)
 //! let app = Router::new()
 //!     .route("/protected", get(protected_handler))
 //!     .layer(middleware::from_fn(AuthMiddleware::handle));
+//!
+//! // Custom login path
+//! let custom_middleware = AuthMiddleware::with_login_path("/auth/login");
+//! let app = Router::new()
+//!     .route("/protected", get(protected_handler))
+//!     .layer(middleware::from_fn(move |req, next| {
+//!         custom_middleware.clone().handle_with_config(req, next)
+//!     }));
 //! # }
 //! ```
 
@@ -34,9 +43,13 @@ use axum::{
 ///
 /// If the user is not authenticated, they will be redirected to the login page.
 /// For HTMX requests, returns a 401 Unauthorized status with HX-Redirect header.
-#[derive(Clone)]
+///
+/// # Login Path Configuration
+///
+/// By default, unauthenticated users are redirected to `/login`. This can be
+/// customized using [`AuthMiddleware::with_login_path`].
+#[derive(Clone, Debug)]
 pub struct AuthMiddleware {
-    #[allow(dead_code)] // TODO: Use this field when implementing custom login path
     login_path: String,
 }
 
@@ -73,19 +86,41 @@ impl AuthMiddleware {
         }
     }
 
-    /// Middleware handler that checks for authentication
+    /// Middleware handler that checks for authentication with default login path
     ///
-    /// This is the actual middleware function that gets invoked for each request.
+    /// This is a convenience method that uses the default login path `/login`.
+    /// For custom login paths, use [`AuthMiddleware::with_login_path`] and
+    /// [`AuthMiddleware::handle_with_config`].
     ///
     /// # Errors
     ///
-    /// Returns [`AuthMiddlewareError::Unauthenticated`] if:
+    /// Returns [`AuthMiddlewareError`] if:
     /// - No valid session exists in request extensions
     /// - Session exists but does not contain a user_id
     ///
     /// For HTMX requests, returns 401 with HX-Redirect header to login page.
     /// For standard browser requests, redirects to login page.
     pub async fn handle(
+        request: Request,
+        next: Next,
+    ) -> Result<Response, AuthMiddlewareError> {
+        Self::default().handle_with_config(request, next).await
+    }
+
+    /// Middleware handler that checks for authentication with configured login path
+    ///
+    /// This method uses the login path configured in this middleware instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthMiddlewareError`] if:
+    /// - No valid session exists in request extensions
+    /// - Session exists but does not contain a user_id
+    ///
+    /// For HTMX requests, returns 401 with HX-Redirect header to configured login page.
+    /// For standard browser requests, redirects to configured login page.
+    pub async fn handle_with_config(
+        self,
         request: Request,
         next: Next,
     ) -> Result<Response, AuthMiddlewareError> {
@@ -102,17 +137,18 @@ impl AuthMiddleware {
 
         if !is_authenticated {
             // Check if this is an HTMX request
-            let is_htmx = parts.headers
+            let is_htmx = parts
+                .headers
                 .get("HX-Request")
                 .and_then(|v| v.to_str().ok())
                 == Some("true");
 
             if is_htmx {
                 // For HTMX requests, return 401 with HX-Redirect header
-                return Err(AuthMiddlewareError::Unauthorized);
+                return Err(AuthMiddlewareError::Unauthorized(self.login_path));
             }
             // For regular requests, redirect to login
-            return Err(AuthMiddlewareError::RedirectToLogin);
+            return Err(AuthMiddlewareError::RedirectToLogin(self.login_path));
         }
 
         // User is authenticated, continue with the request
@@ -125,26 +161,30 @@ impl AuthMiddleware {
 #[derive(Debug)]
 pub enum AuthMiddlewareError {
     /// User is not authenticated (HTMX request)
-    Unauthorized,
+    ///
+    /// Contains the login path to redirect to
+    Unauthorized(String),
     /// Redirect to login page (regular request)
-    RedirectToLogin,
+    ///
+    /// Contains the login path to redirect to
+    RedirectToLogin(String),
 }
 
 impl IntoResponse for AuthMiddlewareError {
     fn into_response(self) -> Response {
         match self {
-            Self::Unauthorized => {
+            Self::Unauthorized(login_path) => {
                 // Return 401 with HX-Redirect header for HTMX
                 (
                     StatusCode::UNAUTHORIZED,
-                    [("HX-Redirect", "/login")],
+                    [("HX-Redirect", login_path.as_str())],
                     "Unauthorized",
                 )
                     .into_response()
             }
-            Self::RedirectToLogin => {
+            Self::RedirectToLogin(login_path) => {
                 // Regular HTTP redirect
-                Redirect::to("/login").into_response()
+                Redirect::to(&login_path).into_response()
             }
         }
     }
@@ -233,5 +273,103 @@ mod tests {
 
         // Should proceed to handler
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_custom_login_path_regular_request() {
+        let custom_middleware = AuthMiddleware::with_login_path("/auth/signin");
+        let app = Router::new()
+            .route("/protected", get(protected_handler))
+            .layer(middleware::from_fn(move |req, next| {
+                custom_middleware.clone().handle_with_config(req, next)
+            }));
+
+        let request = Request::builder()
+            .uri("/protected")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+
+        // Should redirect to custom login path
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "/auth/signin"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_custom_login_path_htmx_request() {
+        let custom_middleware = AuthMiddleware::with_login_path("/auth/signin");
+        let app = Router::new()
+            .route("/protected", get(protected_handler))
+            .layer(middleware::from_fn(move |req, next| {
+                custom_middleware.clone().handle_with_config(req, next)
+            }));
+
+        let request = Request::builder()
+            .uri("/protected")
+            .header("HX-Request", "true")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+
+        // Should return 401 with HX-Redirect to custom login path
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers().get("HX-Redirect").unwrap(),
+            "/auth/signin"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_custom_login_path_with_authenticated_request() {
+        let custom_middleware = AuthMiddleware::with_login_path("/auth/signin");
+        let app = Router::new()
+            .route("/protected", get(protected_handler))
+            .layer(middleware::from_fn(move |req, next| {
+                custom_middleware.clone().handle_with_config(req, next)
+            }));
+
+        let mut request = Request::builder()
+            .uri("/protected")
+            .body(Body::empty())
+            .unwrap();
+
+        // Add authenticated session to request extensions
+        let session_id = SessionId::generate();
+        let mut session_data = SessionData::new();
+        session_data.user_id = Some(1);
+        let session = Session::new(session_id, session_data);
+
+        request.extensions_mut().insert(session);
+
+        let response = app.oneshot(request).await.unwrap();
+
+        // Should proceed to handler regardless of custom login path
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_default_login_path_is_slash_login() {
+        let middleware = AuthMiddleware::new();
+        assert_eq!(middleware.login_path, "/login");
+
+        let default_middleware = AuthMiddleware::default();
+        assert_eq!(default_middleware.login_path, "/login");
+    }
+
+    #[tokio::test]
+    async fn test_with_login_path_accepts_string() {
+        let middleware = AuthMiddleware::with_login_path("/custom".to_string());
+        assert_eq!(middleware.login_path, "/custom");
+    }
+
+    #[tokio::test]
+    async fn test_with_login_path_accepts_str() {
+        let middleware = AuthMiddleware::with_login_path("/custom");
+        assert_eq!(middleware.login_path, "/custom");
     }
 }
