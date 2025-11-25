@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use console::style;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// Start development server with hot reload
@@ -13,39 +14,56 @@ impl DevCommand {
         Self
     }
 
-    /// Execute the command
-    pub fn execute() -> Result<()> {
+    /// Execute the command in the specified directory
+    pub fn execute(path: &Path) -> Result<()> {
+        // Canonicalize the path to get absolute path and verify it exists
+        let project_dir = path
+            .canonicalize()
+            .with_context(|| format!("Project directory not found: {}", path.display()))?;
+
+        // Verify Cargo.toml exists in the target directory
+        if !project_dir.join("Cargo.toml").exists() {
+            anyhow::bail!(
+                "No Cargo.toml found in {}. Is this an acton-htmx project?",
+                project_dir.display()
+            );
+        }
+
         println!(
-            "{} {}",
+            "{} {} in {}",
             style("Starting").green().bold(),
-            style("development server...").bold()
+            style("development server").bold(),
+            style(project_dir.display()).cyan()
         );
         println!();
 
-        // Check if cargo-watch is installed
-        if !Self::is_cargo_watch_installed() {
+        // Check if bacon is installed
+        if !Self::is_bacon_installed() {
             println!(
                 "{} is not installed.",
-                style("cargo-watch").yellow().bold()
+                style("bacon").yellow().bold()
             );
             println!();
             println!("Install it with:");
-            println!("  {} {}", style("$").dim(), style("cargo install cargo-watch").cyan());
+            println!(
+                "  {} {}",
+                style("$").dim(),
+                style("cargo install bacon").cyan()
+            );
             println!();
             println!("For now, starting without hot reload...");
             println!();
 
-            return Self::run_without_watch();
+            return Self::run_without_watch(&project_dir);
         }
 
-        // Run with cargo-watch for hot reload
-        Self::run_with_watch()
+        // Run with bacon for hot reload
+        Self::run_with_bacon(&project_dir)
     }
 
-    /// Check if cargo-watch is installed
-    fn is_cargo_watch_installed() -> bool {
-        Command::new("cargo")
-            .arg("watch")
+    /// Check if bacon is installed
+    fn is_bacon_installed() -> bool {
+        Command::new("bacon")
             .arg("--version")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -54,31 +72,22 @@ impl DevCommand {
             .unwrap_or(false)
     }
 
-    /// Run with cargo-watch for hot reload
-    fn run_with_watch() -> Result<()> {
+    /// Run with bacon for hot reload
+    fn run_with_bacon(project_dir: &Path) -> Result<()> {
         println!(
             "{}",
-            style("Hot reload enabled. Watching for changes...").green()
+            style("Hot reload enabled via bacon. Watching for changes...").green()
         );
         println!();
 
-        let mut child = Command::new("cargo")
-            .args([
-                "watch",
-                "-x",
-                "run",
-                "-w",
-                "src",
-                "-w",
-                "templates",
-                "-w",
-                "config",
-            ])
+        let mut child = Command::new("bacon")
+            .arg("run")
+            .current_dir(project_dir)
             .spawn()
-            .context("Failed to start cargo watch")?;
+            .context("Failed to start bacon")?;
 
         // Wait for the process to complete
-        let status = child.wait().context("Failed to wait for cargo watch")?;
+        let status = child.wait().context("Failed to wait for bacon")?;
 
         if !status.success() {
             anyhow::bail!("Development server exited with error");
@@ -88,9 +97,10 @@ impl DevCommand {
     }
 
     /// Run without hot reload (fallback)
-    fn run_without_watch() -> Result<()> {
+    fn run_without_watch(project_dir: &Path) -> Result<()> {
         let mut child = Command::new("cargo")
             .arg("run")
+            .current_dir(project_dir)
             .spawn()
             .context("Failed to start development server")?;
 

@@ -16,7 +16,7 @@ readme = "../README.md"
 workspace = true
 
 [lib]
-name = "acton_htmx"
+name = "acton_htmx_cli_lib"
 path = "src/lib.rs"
 
 [[bin]]

@@ -6,12 +6,13 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::templates::ProjectTemplate;
+use crate::{DatabaseBackend, ProjectTemplate};
 
 /// Create a new acton-htmx project
 pub struct NewCommand {
     name: String,
     output_dir: PathBuf,
+    database: DatabaseBackend,
 }
 
 impl NewCommand {
@@ -20,7 +21,8 @@ impl NewCommand {
     /// # Arguments
     ///
     /// * `name` - Project name (must be valid Rust crate name)
-    pub fn new(name: String) -> Result<Self> {
+    /// * `database` - Database backend (`SQLite` or `PostgreSQL`)
+    pub fn new(name: String, database: DatabaseBackend) -> Result<Self> {
         // Validate project name (must be valid Rust identifier)
         if !is_valid_crate_name(&name) {
             anyhow::bail!(
@@ -37,16 +39,23 @@ impl NewCommand {
             );
         }
 
-        Ok(Self { name, output_dir })
+        Ok(Self { name, output_dir, database })
     }
 
     /// Execute the command
     pub fn execute(&self) -> Result<()> {
+        let db_name = match self.database {
+            DatabaseBackend::Sqlite => "SQLite",
+            DatabaseBackend::Postgres => "PostgreSQL",
+        };
+
         println!(
-            "{} {} {}",
+            "{} {} {} {} {}",
             style("Creating").green().bold(),
             style("acton-htmx project:").bold(),
-            style(&self.name).cyan().bold()
+            style(&self.name).cyan().bold(),
+            style("with").dim(),
+            style(db_name).yellow().bold()
         );
         println!();
 
@@ -76,7 +85,7 @@ impl NewCommand {
 
     /// Create directory structure
     fn create_structure(&self) -> Result<()> {
-        let dirs = [
+        let mut dirs = vec![
             "",
             "src",
             "src/handlers",
@@ -93,10 +102,22 @@ impl NewCommand {
             "tests",
         ];
 
+        // Add data directory for SQLite
+        if matches!(self.database, DatabaseBackend::Sqlite) {
+            dirs.push("data");
+        }
+
         for dir in &dirs {
             let path = self.output_dir.join(dir);
             fs::create_dir_all(&path)
                 .with_context(|| format!("Failed to create directory: {}", path.display()))?;
+        }
+
+        // Create .gitkeep in data directory for SQLite
+        if matches!(self.database, DatabaseBackend::Sqlite) {
+            let gitkeep_path = self.output_dir.join("data/.gitkeep");
+            fs::write(&gitkeep_path, "# SQLite database files are stored here\n")
+                .with_context(|| format!("Failed to create .gitkeep: {}", gitkeep_path.display()))?;
         }
 
         Ok(())
@@ -104,7 +125,7 @@ impl NewCommand {
 
     /// Generate project files from templates
     fn generate_files(&self) -> Result<()> {
-        let template = ProjectTemplate::new(&self.name);
+        let template = ProjectTemplate::new(&self.name, self.database);
 
         // Generate all files
         template.generate(&self.output_dir)?;
@@ -118,18 +139,39 @@ impl NewCommand {
         println!();
         println!("{}", style("Next steps:").bold());
         println!();
-        println!("  {} Navigate to project:", style("1.").cyan());
-        println!("     {} {}", style("$").dim(), style(format!("cd {}", self.name)).cyan());
-        println!();
-        println!("  {} Set up database:", style("2.").cyan());
-        println!("     {} {}", style("$").dim(), style("createdb").cyan());
-        println!("     {} {}", style("$").dim(), style("acton-htmx db migrate").cyan());
-        println!();
-        println!("  {} Start development server:", style("3.").cyan());
-        println!("     {} {}", style("$").dim(), style("acton-htmx dev").cyan());
-        println!();
-        println!("  {} Open in browser:", style("4.").cyan());
-        println!("     {}", style("http://localhost:3000").cyan().underlined());
+
+        match self.database {
+            DatabaseBackend::Sqlite => {
+                // SQLite: Zero setup, just run!
+                println!("  {} Navigate to project:", style("1.").cyan());
+                println!("     {} {}", style("$").dim(), style(format!("cd {}", self.name)).cyan());
+                println!();
+                println!("  {} Start development server:", style("2.").cyan());
+                println!("     {} {}", style("$").dim(), style("acton-htmx dev").cyan());
+                println!();
+                println!("     {} Database is created automatically on first run!", style("✓").green());
+                println!();
+                println!("  {} Open in browser:", style("3.").cyan());
+                println!("     {}", style("http://localhost:3000").cyan().underlined());
+            }
+            DatabaseBackend::Postgres => {
+                // PostgreSQL: Requires database setup
+                println!("  {} Navigate to project:", style("1.").cyan());
+                println!("     {} {}", style("$").dim(), style(format!("cd {}", self.name)).cyan());
+                println!();
+                println!("  {} Set up database:", style("2.").cyan());
+                let db_name = self.name.replace('-', "_");
+                println!("     {} {}", style("$").dim(), style(format!("createdb {db_name}_dev")).cyan());
+                println!("     {} {}", style("$").dim(), style("acton-htmx db migrate").cyan());
+                println!();
+                println!("  {} Start development server:", style("3.").cyan());
+                println!("     {} {}", style("$").dim(), style("acton-htmx dev").cyan());
+                println!();
+                println!("  {} Open in browser:", style("4.").cyan());
+                println!("     {}", style("http://localhost:3000").cyan().underlined());
+            }
+        }
+
         println!();
         println!(
             "{}",
@@ -180,10 +222,21 @@ mod tests {
 
     #[test]
     fn test_new_command_validates_name() {
-        let result = NewCommand::new("InvalidName".to_string());
+        let result = NewCommand::new("InvalidName".to_string(), DatabaseBackend::Sqlite);
         assert!(result.is_err());
 
-        let result = NewCommand::new("valid_name".to_string());
+        let result = NewCommand::new("valid_name".to_string(), DatabaseBackend::Sqlite);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_new_command_accepts_database_backend() {
+        let result = NewCommand::new("test_sqlite".to_string(), DatabaseBackend::Sqlite);
+        assert!(result.is_ok());
+        assert!(matches!(result.unwrap().database, DatabaseBackend::Sqlite));
+
+        let result = NewCommand::new("test_postgres".to_string(), DatabaseBackend::Postgres);
+        assert!(result.is_ok());
+        assert!(matches!(result.unwrap().database, DatabaseBackend::Postgres));
     }
 }

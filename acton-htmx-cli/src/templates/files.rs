@@ -1,7 +1,48 @@
 //! Template file contents
 
-/// Cargo.toml template for new projects
-pub const CARGO_TOML: &str = r#"[package]
+// =============================================================================
+// Cargo.toml Templates
+// =============================================================================
+
+/// Cargo.toml template for `SQLite` projects
+pub const CARGO_TOML_SQLITE: &str = r#"[package]
+name = "{{project_name}}"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+
+[dependencies]
+acton-htmx = { version = "0.1", features = ["full"] }
+acton-reactive = "5"
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+validator = { version = "0.20", features = ["derive"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+anyhow = "1"
+thiserror = "2"
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+"#;
+
+/// Cargo.toml template for `PostgreSQL` projects
+pub const CARGO_TOML_POSTGRES: &str = r#"[package]
 name = "{{project_name}}"
 version = "0.1.0"
 edition = "2021"
@@ -37,8 +78,119 @@ lto = true
 codegen-units = 1
 "#;
 
-/// README.md template for new projects
-pub const README_MD: &str = r"# {{project_name}}
+/// Cargo.toml template (backwards compatibility alias for `PostgreSQL`)
+pub const CARGO_TOML: &str = CARGO_TOML_POSTGRES;
+
+// =============================================================================
+// README Templates
+// =============================================================================
+
+/// README.md template for `SQLite` projects (zero setup)
+pub const README_MD_SQLITE: &str = r"# {{project_name}}
+
+A web application built with [acton-htmx](https://github.com/govcraft/acton-htmx), an opinionated Rust framework for server-rendered HTMX applications.
+
+## Quick Start
+
+### Prerequisites
+
+- Rust 1.75 or later
+- acton-htmx CLI: `cargo install acton-htmx-cli`
+
+### Setup
+
+```bash
+# Start development server (database created automatically!)
+acton-htmx dev
+```
+
+Open http://localhost:3000
+
+That's it! No database setup required. SQLite is used for development.
+
+## Project Structure
+
+```
+{{project_name}}/
+├── src/
+│   ├── main.rs              # Application entry point
+│   ├── handlers/            # HTTP request handlers
+│   │   ├── mod.rs
+│   │   ├── home.rs
+│   │   └── auth.rs
+│   └── models/              # Domain models
+│       ├── mod.rs
+│       └── user.rs
+├── templates/               # Askama templates
+│   ├── layouts/
+│   ├── auth/
+│   └── partials/
+├── static/                  # Static assets
+│   ├── css/
+│   └── js/
+├── config/                  # Configuration files
+│   ├── development.toml
+│   └── production.toml
+├── data/                    # SQLite database files
+│   └── dev.db              # Created on first run
+└── migrations/              # Database migrations
+```
+
+## Development
+
+### Running Tests
+
+```bash
+cargo test
+```
+
+### Database Commands
+
+```bash
+# Run migrations (automatic on startup)
+acton-htmx db migrate
+
+# Reset database
+acton-htmx db reset
+
+# Create new migration
+acton-htmx db create <name>
+```
+
+### Building for Production
+
+```bash
+cargo build --release
+```
+
+## Switching to PostgreSQL
+
+For production, you may want to use PostgreSQL. Recreate the project with:
+
+```bash
+acton-htmx new {{project_name}} --database postgres
+```
+
+Or modify `config/production.toml` and `Cargo.toml` manually.
+
+## Features
+
+- ✅ HTMX-first architecture with server-side rendering
+- ✅ Session-based authentication with Argon2id
+- ✅ CSRF protection enabled by default
+- ✅ Security headers configured
+- ✅ SQLite for zero-setup development
+- ✅ Askama templates with compile-time checking
+- ✅ Form validation with validator crate
+- ✅ Flash messages via acton-reactive agents
+
+## License
+
+MIT
+";
+
+/// README.md template for `PostgreSQL` projects
+pub const README_MD_POSTGRES: &str = r"# {{project_name}}
 
 A web application built with [acton-htmx](https://github.com/govcraft/acton-htmx), an opinionated Rust framework for server-rendered HTMX applications.
 
@@ -138,6 +290,9 @@ cargo build --release
 MIT
 ";
 
+/// README.md template (backwards compatibility alias for `PostgreSQL`)
+pub const README_MD: &str = README_MD_POSTGRES;
+
 /// .gitignore template for new projects
 pub const GITIGNORE: &str = r"# Rust
 /target
@@ -168,8 +323,40 @@ Thumbs.db
 *.log
 ";
 
-/// Development configuration template
-pub const CONFIG_DEV: &str = r#"# Development configuration
+// =============================================================================
+// Configuration Templates
+// =============================================================================
+
+/// Development configuration template for `SQLite`
+pub const CONFIG_DEV_SQLITE: &str = r#"# Development configuration (SQLite)
+
+[server]
+host = "127.0.0.1"
+port = 3000
+
+[database]
+# SQLite database file - created automatically on first run
+url = "sqlite:data/dev.db?mode=rwc"
+max_connections = 5
+
+[session]
+secret = "development-secret-change-in-production"
+cookie_name = "{{project_name_snake}}_session"
+cookie_secure = false
+max_age_seconds = 86400
+
+[csrf]
+enabled = true
+
+[security_headers]
+preset = "development"
+
+[logging]
+level = "debug"
+"#;
+
+/// Development configuration template for `PostgreSQL`
+pub const CONFIG_DEV_POSTGRES: &str = r#"# Development configuration (PostgreSQL)
 
 [server]
 host = "127.0.0.1"
@@ -195,8 +382,36 @@ preset = "development"
 level = "debug"
 "#;
 
-/// Production configuration template
-pub const CONFIG_PROD: &str = r#"# Production configuration
+/// Production configuration template for `SQLite`
+pub const CONFIG_PROD_SQLITE: &str = r#"# Production configuration (SQLite)
+# Note: For production, consider using PostgreSQL for better performance and features
+
+[server]
+host = "0.0.0.0"
+port = 3000
+
+[database]
+url = "${DATABASE_URL}"  # e.g., sqlite:/var/lib/myapp/prod.db?mode=rwc
+max_connections = 10
+
+[session]
+secret = "${SESSION_SECRET}"
+cookie_name = "{{project_name_snake}}_session"
+cookie_secure = true
+max_age_seconds = 86400
+
+[csrf]
+enabled = true
+
+[security_headers]
+preset = "strict"
+
+[logging]
+level = "info"
+"#;
+
+/// Production configuration template for `PostgreSQL`
+pub const CONFIG_PROD_POSTGRES: &str = r#"# Production configuration (PostgreSQL)
 
 [server]
 host = "0.0.0.0"
@@ -222,8 +437,130 @@ preset = "strict"
 level = "info"
 "#;
 
-/// Main.rs template for new projects
-pub const MAIN_RS: &str = r#"//! {{project_name}} - Built with acton-htmx
+/// Development configuration template (backwards compatibility alias for `PostgreSQL`)
+pub const CONFIG_DEV: &str = CONFIG_DEV_POSTGRES;
+/// Production configuration template (backwards compatibility alias for `PostgreSQL`)
+pub const CONFIG_PROD: &str = CONFIG_PROD_POSTGRES;
+
+// =============================================================================
+// Main.rs Templates
+// =============================================================================
+
+/// Main.rs template for `SQLite` projects
+pub const MAIN_RS_SQLITE: &str = r#"//! {{project_name}} - Built with acton-htmx
+
+#![forbid(unsafe_code)]
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![warn(clippy::cargo)]
+
+use acton_htmx::{
+    prelude::*,
+    config::Config,
+    state::AppState,
+    middleware::{CsrfLayer, SecurityHeadersConfig, SecurityHeadersLayer, SessionLayer},
+    agents::{CsrfManagerAgent, SessionManagerAgent},
+};
+use acton_reactive::prelude::*;
+use anyhow::Result;
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use sqlx::sqlite::SqlitePoolOptions;
+use tower_http::{
+    services::ServeDir,
+    trace::TraceLayer,
+};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+mod handlers;
+mod models;
+
+use handlers::{auth, home};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "{{project_name_snake}}=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Load configuration
+    let config = Config::load()?;
+
+    // Ensure data directory exists for SQLite
+    std::fs::create_dir_all("data")?;
+
+    // Initialize SQLite database (created automatically with mode=rwc)
+    let db = SqlitePoolOptions::new()
+        .max_connections(config.database.max_connections)
+        .connect(&config.database.url)
+        .await?;
+
+    // Run migrations automatically
+    tracing::info!("Running database migrations...");
+    sqlx::migrate!("./migrations").run(&db).await?;
+    tracing::info!("Migrations complete!");
+
+    // Initialize acton-reactive runtime
+    let acton_app = ActonApp::launch();
+
+    // Spawn session manager agent
+    let session_manager = acton_app
+        .spawn_agent::<SessionManagerAgent>("session-manager")
+        .await?;
+
+    // Spawn CSRF manager agent
+    let csrf_manager = acton_app
+        .spawn_agent::<CsrfManagerAgent>("csrf-manager")
+        .await?;
+
+    // Create application state
+    let state = AppState::new(
+        db,
+        acton_app.clone(),
+        session_manager,
+        csrf_manager,
+        config.clone(),
+    );
+
+    // Build router
+    let app = Router::new()
+        // Public routes
+        .route("/", get(home::index))
+        .route("/login", get(auth::login_form).post(auth::login))
+        .route("/register", get(auth::register_form).post(auth::register))
+        .route("/logout", post(auth::logout))
+        // Static files
+        .nest_service("/static", ServeDir::new("static"))
+        // Middleware
+        .layer(SecurityHeadersLayer::new(
+            SecurityHeadersConfig::from_preset(&config.security_headers.preset),
+        ))
+        .layer(CsrfLayer::new())
+        .layer(SessionLayer::new(config.session.clone()))
+        .layer(TraceLayer::new_for_http())
+        // State
+        .with_state(state);
+
+    // Start server
+    let addr = format!("{}:{}", config.server.host, config.server.port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+
+    tracing::info!("Starting server on {}", addr);
+
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+"#;
+
+/// Main.rs template for `PostgreSQL` projects
+pub const MAIN_RS_POSTGRES: &str = r#"//! {{project_name}} - Built with acton-htmx
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
@@ -330,6 +667,9 @@ async fn main() -> Result<()> {
 }
 "#;
 
+/// Main.rs template (backwards compatibility alias for `PostgreSQL`)
+pub const MAIN_RS: &str = MAIN_RS_POSTGRES;
+
 /// Handlers module template
 pub const HANDLERS_MOD: &str = r"//! HTTP request handlers
 
@@ -360,8 +700,13 @@ pub async fn index() -> Html<String> {
 }
 "#;
 
-/// Authentication handler template
-pub const HANDLERS_AUTH: &str = r#"//! Authentication handlers
+// =============================================================================
+// Handler Templates
+// =============================================================================
+
+/// Authentication handler template (database-agnostic, uses framework's User model)
+/// The framework's User model handles `SQLite` vs `PostgreSQL` differences internally
+pub const HANDLERS_AUTH_SQLITE: &str = r#"//! Authentication handlers
 
 use acton_htmx::{
     prelude::*,
@@ -551,6 +896,12 @@ pub async fn logout(mut session: Session) -> impl IntoResponse {
     Redirect::to("/login").into_response()
 }
 "#;
+
+/// Authentication handler template for `PostgreSQL` (same as `SQLite` - uses framework User model)
+pub const HANDLERS_AUTH_POSTGRES: &str = HANDLERS_AUTH_SQLITE;
+
+/// Authentication handler template (backwards compatibility alias)
+pub const HANDLERS_AUTH: &str = HANDLERS_AUTH_POSTGRES;
 
 /// Models module template
 pub const MODELS_MOD: &str = r"//! Domain models
@@ -871,8 +1222,26 @@ a {
 }
 "#;
 
-/// Initial users table migration
-pub const MIGRATION_USERS: &str = r"-- Create users table
+// =============================================================================
+// Migration Templates
+// =============================================================================
+
+/// Initial users table migration for `SQLite`
+pub const MIGRATION_USERS_SQLITE: &str = r"-- Create users table (SQLite)
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+";
+
+/// Initial users table migration for `PostgreSQL`
+pub const MIGRATION_USERS_POSTGRES: &str = r"-- Create users table (PostgreSQL)
 
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -884,3 +1253,6 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_email ON users(email);
 ";
+
+/// Users migration template (backwards compatibility alias for `PostgreSQL`)
+pub const MIGRATION_USERS: &str = MIGRATION_USERS_POSTGRES;

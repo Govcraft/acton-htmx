@@ -13,3 +13,13 @@ pub mod templates;
 pub use scaffold::{FieldDefinition, FieldType, ScaffoldGenerator, TemplateHelpers};
 pub use template_manager::TemplateManager;
 pub use templates::ProjectTemplate;
+
+/// Database backend for new projects
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+pub enum DatabaseBackend {
+    /// `SQLite` - zero setup, perfect for development (default)
+    #[default]
+    Sqlite,
+    /// `PostgreSQL` - production-grade, requires installation
+    Postgres,
+}

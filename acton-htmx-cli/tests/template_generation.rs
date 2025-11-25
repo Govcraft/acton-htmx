@@ -105,7 +105,7 @@ fn is_valid_crate_name(name: &str) -> bool {
 /// Test that Cargo.toml template contains required fields
 #[test]
 fn test_cargo_toml_template() {
-    use acton_htmx::templates::CARGO_TOML;
+    use acton_htmx_cli_lib::templates::CARGO_TOML;
 
     assert!(CARGO_TOML.contains("[package]"));
     assert!(CARGO_TOML.contains("name = \"{{project_name}}\""));
@@ -119,7 +119,7 @@ fn test_cargo_toml_template() {
 /// Test that README template contains project name placeholder
 #[test]
 fn test_readme_template() {
-    use acton_htmx::templates::README_MD;
+    use acton_htmx_cli_lib::templates::README_MD;
 
     assert!(README_MD.contains("{{project_name}}"));
     assert!(README_MD.contains("acton-htmx"));
@@ -130,7 +130,7 @@ fn test_readme_template() {
 /// Test that gitignore template contains standard entries
 #[test]
 fn test_gitignore_template() {
-    use acton_htmx::templates::GITIGNORE;
+    use acton_htmx_cli_lib::templates::GITIGNORE;
 
     assert!(GITIGNORE.contains("/target"));
     assert!(GITIGNORE.contains(".env"));
@@ -140,7 +140,7 @@ fn test_gitignore_template() {
 /// Test that main.rs template is valid Rust code structure
 #[test]
 fn test_main_rs_template() {
-    use acton_htmx::templates::MAIN_RS;
+    use acton_htmx_cli_lib::templates::MAIN_RS;
 
     assert!(MAIN_RS.contains("fn main()"));
     assert!(MAIN_RS.contains("use acton_htmx"));
@@ -148,22 +148,34 @@ fn test_main_rs_template() {
     assert!(MAIN_RS.contains("Router::new()"));
 }
 
-/// Test that migration template has valid SQL
+/// Test that migration template has valid SQL (PostgreSQL version)
 #[test]
-fn test_migration_template() {
-    use acton_htmx::templates::MIGRATION_USERS;
+fn test_migration_template_postgres() {
+    use acton_htmx_cli_lib::templates::MIGRATION_USERS_POSTGRES;
 
-    assert!(MIGRATION_USERS.contains("CREATE TABLE users"));
-    assert!(MIGRATION_USERS.contains("id SERIAL PRIMARY KEY"));
-    assert!(MIGRATION_USERS.contains("email VARCHAR"));
-    assert!(MIGRATION_USERS.contains("password_hash VARCHAR"));
-    assert!(MIGRATION_USERS.contains("CREATE INDEX"));
+    assert!(MIGRATION_USERS_POSTGRES.contains("CREATE TABLE users"));
+    assert!(MIGRATION_USERS_POSTGRES.contains("id SERIAL PRIMARY KEY"));
+    assert!(MIGRATION_USERS_POSTGRES.contains("email VARCHAR"));
+    assert!(MIGRATION_USERS_POSTGRES.contains("password_hash VARCHAR"));
+    assert!(MIGRATION_USERS_POSTGRES.contains("CREATE INDEX"));
+}
+
+/// Test that SQLite migration template has valid SQL
+#[test]
+fn test_migration_template_sqlite() {
+    use acton_htmx_cli_lib::templates::MIGRATION_USERS_SQLITE;
+
+    assert!(MIGRATION_USERS_SQLITE.contains("CREATE TABLE"));
+    assert!(MIGRATION_USERS_SQLITE.contains("INTEGER PRIMARY KEY AUTOINCREMENT"));
+    assert!(MIGRATION_USERS_SQLITE.contains("email TEXT"));
+    assert!(MIGRATION_USERS_SQLITE.contains("password_hash TEXT"));
+    assert!(MIGRATION_USERS_SQLITE.contains("CREATE INDEX"));
 }
 
 /// Test that HTML templates have valid structure
 #[test]
 fn test_html_templates() {
-    use acton_htmx::templates::{TEMPLATE_BASE, TEMPLATE_APP, TEMPLATE_LOGIN};
+    use acton_htmx_cli_lib::templates::{TEMPLATE_BASE, TEMPLATE_APP, TEMPLATE_LOGIN};
 
     // Base template
     assert!(TEMPLATE_BASE.contains("<!DOCTYPE html>"));
@@ -178,4 +190,28 @@ fn test_html_templates() {
     assert!(TEMPLATE_LOGIN.contains("hx-post"));
     assert!(TEMPLATE_LOGIN.contains("email"));
     assert!(TEMPLATE_LOGIN.contains("password"));
+}
+
+/// Test that SQLite templates differ from PostgreSQL templates
+#[test]
+fn test_sqlite_vs_postgres_templates() {
+    use acton_htmx_cli_lib::templates::{
+        CARGO_TOML_SQLITE, CARGO_TOML_POSTGRES,
+        MIGRATION_USERS_SQLITE, MIGRATION_USERS_POSTGRES,
+        CONFIG_DEV_SQLITE, CONFIG_DEV_POSTGRES,
+    };
+
+    // Cargo.toml should use sqlite feature for SQLite
+    assert!(CARGO_TOML_SQLITE.contains("sqlite"));
+    assert!(!CARGO_TOML_SQLITE.contains("postgres"));
+    assert!(CARGO_TOML_POSTGRES.contains("postgres"));
+    assert!(!CARGO_TOML_POSTGRES.contains("sqlite"));
+
+    // Migration should use SQLite-specific syntax
+    assert!(MIGRATION_USERS_SQLITE.contains("AUTOINCREMENT"));
+    assert!(MIGRATION_USERS_POSTGRES.contains("SERIAL"));
+
+    // Config should use different database URLs
+    assert!(CONFIG_DEV_SQLITE.contains("sqlite:"));
+    assert!(CONFIG_DEV_POSTGRES.contains("postgres://"));
 }

@@ -7,14 +7,12 @@
 #![allow(clippy::multiple_crate_versions)]
 
 mod commands;
-pub mod templates;
 
+// Re-export from lib.rs
+pub use acton_htmx_cli_lib::{DatabaseBackend, ProjectTemplate};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use commands::{DbCommand, DeployCommand, DevCommand, GenerateCommand, JobsCommand, NewCommand, OAuth2Command, ScaffoldCommand, TemplatesCommand};
-
-// Re-export for library usage
-pub use templates::ProjectTemplate;
 
 #[derive(Parser)]
 #[command(name = "acton-htmx")]
@@ -31,9 +29,16 @@ enum Commands {
     New {
         /// Project name
         name: String,
+        /// Database backend (sqlite or postgres)
+        #[arg(short, long, default_value = "sqlite")]
+        database: DatabaseBackend,
     },
     /// Start development server with hot reload
-    Dev,
+    Dev {
+        /// Project directory (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: std::path::PathBuf,
+    },
     /// Database management commands
     Db {
         #[command(subcommand)]
@@ -106,12 +111,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::New { name } => {
-            let cmd = NewCommand::new(name)?;
+        Commands::New { name, database } => {
+            let cmd = NewCommand::new(name, database)?;
             cmd.execute()?;
         }
-        Commands::Dev => {
-            DevCommand::execute()?;
+        Commands::Dev { path } => {
+            DevCommand::execute(&path)?;
         }
         Commands::Db { command } => {
             let db_cmd = match command {

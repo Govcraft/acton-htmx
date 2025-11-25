@@ -9,7 +9,7 @@ use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::templates::{
+use acton_htmx_cli_lib::templates::{
     DEPLOYMENT_README, DOCKER_COMPOSE, DOCKERIGNORE, DOCKERFILE, ENV_PRODUCTION, JOB_TEMPLATE,
     NGINX_CONF,
 };

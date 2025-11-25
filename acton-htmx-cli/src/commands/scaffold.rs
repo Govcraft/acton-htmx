@@ -21,8 +21,8 @@
 //!   published_at:datetime:optional
 //! ```
 
-use acton_htmx::scaffold::generator::ScaffoldGenerator;
-use acton_htmx::scaffold::helpers::TemplateHelpers;
+use acton_htmx_cli_lib::scaffold::generator::ScaffoldGenerator;
+use acton_htmx_cli_lib::scaffold::helpers::TemplateHelpers;
 use anyhow::{Context, Result};
 use console::style;
 use std::fs;
