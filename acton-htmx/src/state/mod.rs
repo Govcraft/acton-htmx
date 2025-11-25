@@ -6,6 +6,7 @@
 use crate::agents::{CsrfManagerAgent, SessionManagerAgent};
 use crate::jobs::JobAgent;
 use crate::oauth2::OAuth2Agent;
+use crate::template::FrameworkTemplates;
 use crate::{config::ActonHtmxConfig, observability::ObservabilityConfig};
 use acton_reactive::prelude::{AgentHandle, AgentRuntime};
 use sqlx::PgPool;
@@ -25,8 +26,7 @@ use deadpool_redis::Pool as RedisPool;
 /// - Job processing agent (from acton-reactive)
 /// - Database connection pool (PostgreSQL via SQLx)
 /// - Redis cache (optional, for distributed sessions and job persistence)
-///
-/// Note: Askama compiles templates at build time, so no runtime template registry is needed.
+/// - Framework templates (runtime-loadable HTML templates)
 ///
 /// # Example
 ///
@@ -92,6 +92,11 @@ pub struct ActonHtmxState {
     /// Used for distributed sessions and job persistence when enabled
     #[cfg(feature = "redis")]
     redis_pool: Option<RedisPool>,
+
+    /// Framework templates for HTML rendering
+    ///
+    /// XDG-compliant template loader with hot reload support
+    templates: FrameworkTemplates,
 }
 
 impl ActonHtmxState {
@@ -124,6 +129,7 @@ impl ActonHtmxState {
         let csrf_manager = CsrfManagerAgent::spawn(runtime).await?;
         let oauth2_manager = OAuth2Agent::spawn(runtime).await?;
         let job_agent = JobAgent::spawn(runtime).await?;
+        let templates = FrameworkTemplates::new()?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -135,6 +141,7 @@ impl ActonHtmxState {
             database_pool: None,
             #[cfg(feature = "redis")]
             redis_pool: None,
+            templates,
         })
     }
 
@@ -168,6 +175,7 @@ impl ActonHtmxState {
         let csrf_manager = CsrfManagerAgent::spawn(runtime).await?;
         let oauth2_manager = OAuth2Agent::spawn(runtime).await?;
         let job_agent = JobAgent::spawn(runtime).await?;
+        let templates = FrameworkTemplates::new()?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -179,6 +187,7 @@ impl ActonHtmxState {
             database_pool: None,
             #[cfg(feature = "redis")]
             redis_pool: None,
+            templates,
         })
     }
 
@@ -202,6 +211,26 @@ impl ActonHtmxState {
     #[must_use]
     pub fn observability(&self) -> &ObservabilityConfig {
         &self.observability
+    }
+
+    /// Get framework templates
+    ///
+    /// Returns the XDG-compliant template loader for rendering framework HTML.
+    /// Templates can be customized by placing files in `~/.config/acton-htmx/templates/framework/`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// async fn error_page(State(state): State<ActonHtmxState>) -> impl IntoResponse {
+    ///     state.templates().render("errors/404.html", minijinja::context! {
+    ///         message => "Page not found",
+    ///         home_url => "/",
+    ///     })
+    /// }
+    /// ```
+    #[must_use]
+    pub const fn templates(&self) -> &FrameworkTemplates {
+        &self.templates
     }
 
     /// Get the session manager agent handle
