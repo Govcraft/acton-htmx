@@ -11,7 +11,7 @@ pub mod templates;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{DbCommand, DeployCommand, DevCommand, GenerateCommand, JobsCommand, NewCommand, OAuth2Command, ScaffoldCommand};
+use commands::{DbCommand, DeployCommand, DevCommand, GenerateCommand, JobsCommand, NewCommand, OAuth2Command, ScaffoldCommand, TemplatesCommand};
 
 // Re-export for library usage
 pub use templates::ProjectTemplate;
@@ -64,6 +64,11 @@ enum Commands {
         /// Health check URL (default: <http://localhost:8080/health>)
         #[arg(long, default_value = "http://localhost:8080/health")]
         url: String,
+    },
+    /// Manage framework templates
+    Templates {
+        #[command(subcommand)]
+        command: TemplatesCommand,
     },
 }
 
@@ -139,6 +144,9 @@ fn main() -> Result<()> {
         }
         Commands::HealthCheck { url } => {
             health_check(&url)?;
+        }
+        Commands::Templates { command } => {
+            command.execute()?;
         }
     }
 
