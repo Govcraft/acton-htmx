@@ -1,26 +1,26 @@
 [package]
-name = "acton"
+name = "acton-dx"
 version = "1.0.0-beta.8"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-repository = "https://github.com/GovCraft/acton"
+repository = "https://github.com/GovCraft/acton-dx"
 homepage = "https://acton.dev"
 keywords = ["web", "framework", "htmx", "axum", "hypermedia"]
 categories = ["web-programming::http-server", "command-line-utilities"]
-description = "Unified Acton framework CLI - build web applications in Rust"
+description = "Acton DX - Developer experience focused web framework for HTMX applications in Rust"
 readme = "../README.md"
 
 [lints]
 workspace = true
 
 [lib]
-name = "acton"
+name = "acton_dx"
 path = "src/lib.rs"
 
 [[bin]]
-name = "acton"
+name = "acton-dx"
 path = "src/bin/main.rs"
 required-features = ["cli"]
 

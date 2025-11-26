@@ -1,4 +1,4 @@
-//! Acton Framework - Unified CLI for building web applications in Rust
+//! Acton DX - Developer experience focused web framework for Rust
 //!
 //! This crate provides:
 //! - **htmx**: HTMX web framework module (feature-gated)
@@ -23,19 +23,19 @@
 //!
 //! ```bash
 //! # Create a new HTMX project
-//! acton htmx new my-app
+//! acton-dx htmx new my-app
 //!
 //! # Start development server
-//! acton htmx dev
+//! acton-dx htmx dev
 //!
 //! # Generate CRUD scaffold
-//! acton htmx scaffold crud Post title:string content:text
+//! acton-dx htmx scaffold crud Post title:string content:text
 //! ```
 //!
 //! ## Using the Library
 //!
 //! ```rust,ignore
-//! use acton::htmx::prelude::*;
+//! use acton_dx::htmx::prelude::*;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {

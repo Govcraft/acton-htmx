@@ -13,7 +13,7 @@
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use acton::htmx::prelude::*;
+//! use acton_dx::htmx::prelude::*;
 //! use acton_reactive::prelude::ActonApp;
 //!
 //! #[tokio::main]
@@ -76,7 +76,7 @@ pub mod prelude {
     //! # Examples
     //!
     //! ```rust
-    //! use acton::htmx::prelude::*;
+    //! use acton_dx::htmx::prelude::*;
     //! ```
 
     // HTMX extractors and responders (from axum-htmx via responses module)

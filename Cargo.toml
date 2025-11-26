@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "acton",
+    "acton-dx",
 ]
 resolver = "2"
 
@@ -26,7 +26,7 @@ edition = "2021"
 rust-version = "1.83.0"
 authors = ["Acton Contributors"]
 license = "MIT"
-repository = "https://github.com/GovCraft/acton"
+repository = "https://github.com/GovCraft/acton-dx"
 homepage = "https://acton.dev"
 keywords = ["web", "framework", "htmx", "axum", "hypermedia"]
 categories = ["web-programming::http-server"]
