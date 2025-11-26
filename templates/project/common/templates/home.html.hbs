@@ -6,10 +6,10 @@
 <div class="home">
     <h1>Welcome to {{project_name}}!</h1>
 
-    {%- if let Some(id) = user_id %}
-    <p>You are logged in (user ID: {{ id }}). <form action="/logout" method="post" style="display:inline;"><button type="submit">Logout</button></form></p>
+    {%- if user_id.is_some() %}
+    <p class="welcome-message">You're logged in and ready to go!</p>
     {%- else %}
-    <p>You are not logged in. <a href="/login">Login</a> or <a href="/register">Register</a></p>
+    <p>Get started by <a href="/login">logging in</a> or <a href="/register">creating an account</a>.</p>
     {%- endif %}
 
     <h2>Getting Started</h2>

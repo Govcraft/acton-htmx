@@ -12,9 +12,10 @@ use acton_dx::auth::{FlashMessage, hash_password, verify_password};
 use askama::Template;
 use axum::{
     extract::State,
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Response},
     Form,
 };
+use axum_htmx::HxRedirect;
 use serde::Deserialize;
 
 /// User row from `SQLite` database
@@ -33,6 +34,7 @@ struct UserRow {
 #[derive(Template)]
 #[template(path = "auth/login.html")]
 pub struct LoginTemplate {
+    pub user_id: Option<i64>,
     pub error: Option<String>,
     pub flash_messages: Vec<FlashMessage>,
 }
@@ -40,6 +42,7 @@ pub struct LoginTemplate {
 #[derive(Template)]
 #[template(path = "auth/register.html")]
 pub struct RegisterTemplate {
+    pub user_id: Option<i64>,
     pub error: Option<String>,
     pub flash_messages: Vec<FlashMessage>,
 }
@@ -70,6 +73,7 @@ pub async fn login_form(
     session: SessionExtractor,
 ) -> Html<String> {
     let template = LoginTemplate {
+        user_id: session.1.user_id,
         error: None,
         flash_messages: session.1.flash_messages,
     };
@@ -85,6 +89,7 @@ pub async fn login(
     // Validate form
     if form.email.is_empty() || form.password.is_empty() {
         let template = LoginTemplate {
+            user_id: None,
             error: Some("Email and password are required".to_string()),
             flash_messages: vec![],
         };
@@ -102,6 +107,7 @@ pub async fn login(
         Ok(Some(user)) => user,
         Ok(None) => {
             let template = LoginTemplate {
+                user_id: None,
                 error: Some("Invalid email or password".to_string()),
                 flash_messages: vec![],
             };
@@ -110,6 +116,7 @@ pub async fn login(
         Err(e) => {
             tracing::error!("Database error during login: {}", e);
             let template = LoginTemplate {
+                user_id: None,
                 error: Some("An error occurred. Please try again.".to_string()),
                 flash_messages: vec![],
             };
@@ -122,9 +129,11 @@ pub async fn login(
         // Set user ID in session
         session.1.user_id = Some(user.id);
         session.1.flash_messages.push(FlashMessage::success("Successfully logged in!"));
-        Redirect::to("/").into_response()
+        // Use HxRedirect for HTMX-aware redirect
+        (HxRedirect::from("/"), Html(String::new())).into_response()
     } else {
         let template = LoginTemplate {
+            user_id: None,
             error: Some("Invalid email or password".to_string()),
             flash_messages: vec![],
         };
@@ -137,6 +146,7 @@ pub async fn register_form(
     session: SessionExtractor,
 ) -> Html<String> {
     let template = RegisterTemplate {
+        user_id: session.1.user_id,
         error: None,
         flash_messages: session.1.flash_messages,
     };
@@ -152,6 +162,7 @@ pub async fn register(
     // Validate form
     if form.email.is_empty() {
         let template = RegisterTemplate {
+            user_id: None,
             error: Some("Email is required".to_string()),
             flash_messages: vec![],
         };
@@ -160,6 +171,7 @@ pub async fn register(
 
     if form.password.len() < 8 {
         let template = RegisterTemplate {
+            user_id: None,
             error: Some("Password must be at least 8 characters".to_string()),
             flash_messages: vec![],
         };
@@ -168,6 +180,7 @@ pub async fn register(
 
     if form.password != form.password_confirm {
         let template = RegisterTemplate {
+            user_id: None,
             error: Some("Passwords do not match".to_string()),
             flash_messages: vec![],
         };
@@ -184,6 +197,7 @@ pub async fn register(
 
     if matches!(exists, Ok(Some(_))) {
         let template = RegisterTemplate {
+            user_id: None,
             error: Some("Email already registered".to_string()),
             flash_messages: vec![],
         };
@@ -196,6 +210,7 @@ pub async fn register(
         Err(e) => {
             tracing::error!("Password hashing failed: {}", e);
             let template = RegisterTemplate {
+                user_id: None,
                 error: Some("An error occurred. Please try again.".to_string()),
                 flash_messages: vec![],
             };
@@ -222,11 +237,13 @@ pub async fn register(
             // Auto-login after registration
             session.1.user_id = Some(user_id);
             session.1.flash_messages.push(FlashMessage::success("Account created successfully! Welcome!"));
-            Redirect::to("/").into_response()
+            // Use HxRedirect for HTMX-aware redirect
+            (HxRedirect::from("/"), Html(String::new())).into_response()
         }
         Err(e) => {
             tracing::error!("Failed to create user: {}", e);
             let template = RegisterTemplate {
+                user_id: None,
                 error: Some("Failed to create account. Please try again.".to_string()),
                 flash_messages: vec![],
             };
@@ -242,5 +259,6 @@ pub async fn logout(
     // Clear user ID from session
     session.1.user_id = None;
     session.1.flash_messages.push(FlashMessage::info("You have been logged out."));
-    Redirect::to("/login").into_response()
+    // Use HxRedirect for HTMX-aware redirect
+    (HxRedirect::from("/login"), Html(String::new())).into_response()
 }
