@@ -1,6 +1,7 @@
 //! Home page handler
 
 use acton_dx::prelude::*;
+use acton_dx::auth::FlashMessage;
 use askama::Template;
 use axum::response::Html;
 
@@ -8,14 +9,14 @@ use axum::response::Html;
 #[template(path = "home.html")]
 pub struct HomeTemplate {
     pub user_id: Option<i64>,
-    pub flash_messages: Vec<acton_dx::auth::FlashMessage>,
+    pub flash_messages: Vec<FlashMessage>,
 }
 
 /// GET / - Home page
 pub async fn index(session: SessionExtractor) -> Html<String> {
     let template = HomeTemplate {
-        user_id: session.data.user_id,
-        flash_messages: session.data.flash_messages.clone(),
+        user_id: session.1.user_id,
+        flash_messages: session.1.flash_messages,
     };
     Html(template.render().unwrap())
 }

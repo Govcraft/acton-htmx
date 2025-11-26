@@ -148,11 +148,16 @@ pub mod prelude {
         SendEmailJob, SimpleEmailTemplate, SmtpBackend,
     };
 
-    // OAuth2 authentication
+    // OAuth2 authentication (postgres-independent types)
     pub use super::oauth2::{
-        handle_oauth_callback, initiate_oauth, unlink_oauth_account, GitHubProvider,
-        GoogleProvider, OAuth2Agent, OAuthAccount, OAuthConfig, OAuthError, OAuthProvider,
+        GitHubProvider, GoogleProvider, OAuth2Agent, OAuthConfig, OAuthError, OAuthProvider,
         OAuthState, OAuthToken, OAuthUserInfo, OidcProvider, ProviderConfig,
+    };
+
+    // OAuth2 handlers and models (postgres only)
+    #[cfg(feature = "postgres")]
+    pub use super::oauth2::{
+        handle_oauth_callback, initiate_oauth, unlink_oauth_account, OAuthAccount,
     };
 
     // Re-export key dependencies for framework users

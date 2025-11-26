@@ -62,6 +62,7 @@ use figment::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(feature = "cedar")]
 use std::time::Duration;
 
 use crate::htmx::oauth2::types::OAuthConfig;

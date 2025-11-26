@@ -1,4 +1,4 @@
-//! Authentication handlers with SQLite database integration
+//! Authentication handlers with `SQLite` database integration
 //!
 //! Provides login, registration, and logout functionality with:
 //! - Argon2id password hashing
@@ -8,7 +8,7 @@
 
 use crate::AppState;
 use acton_dx::prelude::*;
-use acton_dx::auth::{FlashLevel, FlashMessage, hash_password, verify_password};
+use acton_dx::auth::{FlashMessage, hash_password, verify_password};
 use askama::Template;
 use axum::{
     extract::State,
@@ -17,10 +17,11 @@ use axum::{
 };
 use serde::Deserialize;
 
-/// User row from SQLite database
+/// User row from `SQLite` database
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct UserRow {
     id: i64,
+    #[allow(dead_code)]
     email: String,
     password_hash: String,
 }
@@ -68,10 +69,9 @@ pub struct RegisterForm {
 pub async fn login_form(
     session: SessionExtractor,
 ) -> Html<String> {
-    let flash_messages = session.data.flash_messages.clone();
     let template = LoginTemplate {
         error: None,
-        flash_messages,
+        flash_messages: session.1.flash_messages,
     };
     Html(template.render().unwrap())
 }
@@ -95,7 +95,7 @@ pub async fn login(
     let user = match sqlx::query_as::<_, UserRow>(
         "SELECT id, email, password_hash FROM users WHERE email = ?"
     )
-    .bind(&form.email.to_lowercase())
+    .bind(form.email.to_lowercase())
     .fetch_optional(state.db())
     .await
     {
@@ -118,23 +118,17 @@ pub async fn login(
     };
 
     // Verify password
-    match verify_password(&form.password, &user.password_hash) {
-        Ok(true) => {
-            // Set user ID in session
-            session.data.user_id = Some(user.id);
-            session.data.flash_messages.push(FlashMessage::new(
-                FlashLevel::Success,
-                "Successfully logged in!".to_string(),
-            ));
-            Redirect::to("/").into_response()
-        }
-        Ok(false) | Err(_) => {
-            let template = LoginTemplate {
-                error: Some("Invalid email or password".to_string()),
-                flash_messages: vec![],
-            };
-            Html(template.render().unwrap()).into_response()
-        }
+    if matches!(verify_password(&form.password, &user.password_hash), Ok(true)) {
+        // Set user ID in session
+        session.1.user_id = Some(user.id);
+        session.1.flash_messages.push(FlashMessage::success("Successfully logged in!"));
+        Redirect::to("/").into_response()
+    } else {
+        let template = LoginTemplate {
+            error: Some("Invalid email or password".to_string()),
+            flash_messages: vec![],
+        };
+        Html(template.render().unwrap()).into_response()
     }
 }
 
@@ -142,10 +136,9 @@ pub async fn login(
 pub async fn register_form(
     session: SessionExtractor,
 ) -> Html<String> {
-    let flash_messages = session.data.flash_messages.clone();
     let template = RegisterTemplate {
         error: None,
-        flash_messages,
+        flash_messages: session.1.flash_messages,
     };
     Html(template.render().unwrap())
 }
@@ -185,7 +178,7 @@ pub async fn register(
     let exists = sqlx::query_scalar::<_, i32>(
         "SELECT 1 FROM users WHERE email = ?"
     )
-    .bind(&form.email.to_lowercase())
+    .bind(form.email.to_lowercase())
     .fetch_optional(state.db())
     .await;
 
@@ -217,7 +210,7 @@ pub async fn register(
         VALUES (?, ?, '["user"]', '[]', 0)
         "#
     )
-    .bind(&form.email.to_lowercase())
+    .bind(form.email.to_lowercase())
     .bind(&password_hash)
     .execute(state.db())
     .await;
@@ -227,11 +220,8 @@ pub async fn register(
             let user_id = result.last_insert_rowid();
 
             // Auto-login after registration
-            session.data.user_id = Some(user_id);
-            session.data.flash_messages.push(FlashMessage::new(
-                FlashLevel::Success,
-                "Account created successfully! Welcome!".to_string(),
-            ));
+            session.1.user_id = Some(user_id);
+            session.1.flash_messages.push(FlashMessage::success("Account created successfully! Welcome!"));
             Redirect::to("/").into_response()
         }
         Err(e) => {
@@ -250,10 +240,7 @@ pub async fn logout(
     mut session: SessionExtractor,
 ) -> Response {
     // Clear user ID from session
-    session.data.user_id = None;
-    session.data.flash_messages.push(FlashMessage::new(
-        FlashLevel::Info,
-        "You have been logged out.".to_string(),
-    ));
+    session.1.user_id = None;
+    session.1.flash_messages.push(FlashMessage::info("You have been logged out."));
     Redirect::to("/login").into_response()
 }

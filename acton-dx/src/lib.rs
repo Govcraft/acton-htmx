@@ -35,7 +35,7 @@
 //! ## Using the Library
 //!
 //! ```rust,ignore
-//! use acton_dx::htmx::prelude::*;
+//! use acton_dx::prelude::*;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -71,3 +71,42 @@ pub mod htmx;
 /// - Deployment (`acton htmx deploy`)
 #[cfg(feature = "cli")]
 pub mod cli;
+
+// Re-export htmx submodules at crate root for convenience
+// This allows `use acton_dx::prelude::*` instead of `use acton_dx::htmx::prelude::*`
+#[cfg(feature = "htmx")]
+pub use htmx::agents;
+#[cfg(feature = "htmx")]
+pub use htmx::auth;
+#[cfg(feature = "htmx")]
+pub use htmx::config;
+#[cfg(feature = "htmx")]
+pub use htmx::email;
+#[cfg(feature = "htmx")]
+pub use htmx::error;
+#[cfg(feature = "htmx")]
+pub use htmx::extractors;
+#[cfg(feature = "htmx")]
+pub use htmx::forms;
+#[cfg(feature = "htmx")]
+pub use htmx::handlers;
+#[cfg(feature = "htmx")]
+pub use htmx::health;
+#[cfg(feature = "htmx")]
+pub use htmx::jobs;
+#[cfg(feature = "htmx")]
+pub use htmx::middleware;
+#[cfg(feature = "htmx")]
+pub use htmx::oauth2;
+#[cfg(feature = "htmx")]
+pub use htmx::observability;
+#[cfg(feature = "htmx")]
+pub use htmx::prelude;
+#[cfg(feature = "htmx")]
+pub use htmx::responses;
+#[cfg(feature = "htmx")]
+pub use htmx::state;
+#[cfg(feature = "htmx")]
+pub use htmx::storage;
+#[cfg(feature = "htmx")]
+pub use htmx::template;

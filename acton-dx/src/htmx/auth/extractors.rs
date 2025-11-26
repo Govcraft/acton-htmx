@@ -62,6 +62,7 @@ use axum::{
 /// ```
 pub struct Authenticated<T>(pub T);
 
+#[cfg(feature = "postgres")]
 impl<S> FromRequestParts<S> for Authenticated<User>
 where
     S: Send + Sync,
@@ -124,6 +125,7 @@ where
 /// ```
 pub struct OptionalAuth<T>(pub Option<T>);
 
+#[cfg(feature = "postgres")]
 impl<S> FromRequestParts<S> for OptionalAuth<User>
 where
     S: Send + Sync,
@@ -152,6 +154,75 @@ where
         let user = User::find_by_id(user_id, app_state.database_pool())
             .await
             .ok(); // Convert Result to Option - failures return None
+
+        Ok(Self(user))
+    }
+}
+
+// SQLite implementations (when postgres is not enabled)
+
+#[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+impl<S> FromRequestParts<S> for Authenticated<User>
+where
+    S: Send + Sync,
+    ActonHtmxState: FromRef<S>,
+{
+    type Rejection = AuthenticationError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let is_htmx = is_htmx_request(&parts.headers);
+
+        let session = parts
+            .extensions
+            .get::<Session>()
+            .cloned()
+            .ok_or_else(|| AuthenticationError::missing_session(is_htmx))?;
+
+        let user_id = session
+            .user_id()
+            .ok_or_else(|| AuthenticationError::not_authenticated(is_htmx))?;
+
+        let app_state = ActonHtmxState::from_ref(state);
+
+        let user = User::find_by_id(user_id, app_state.database_pool())
+            .await
+            .map_err(|e| match e {
+                UserError::NotFound => AuthenticationError::not_authenticated(is_htmx),
+                _ => AuthenticationError::DatabaseError(e),
+            })?;
+
+        Ok(Self(user))
+    }
+}
+
+#[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+impl<S> FromRequestParts<S> for OptionalAuth<User>
+where
+    S: Send + Sync,
+    ActonHtmxState: FromRef<S>,
+{
+    type Rejection = AuthenticationError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let Some(session) = parts.extensions.get::<Session>().cloned() else {
+            return Ok(Self(None));
+        };
+
+        let Some(user_id) = session.user_id() else {
+            return Ok(Self(None));
+        };
+
+        let app_state = ActonHtmxState::from_ref(state);
+
+        let user = User::find_by_id(user_id, app_state.database_pool())
+            .await
+            .ok();
 
         Ok(Self(user))
     }

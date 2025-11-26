@@ -9,8 +9,13 @@ use crate::htmx::oauth2::OAuth2Agent;
 use crate::htmx::template::FrameworkTemplates;
 use crate::htmx::{config::ActonHtmxConfig, observability::ObservabilityConfig};
 use acton_reactive::prelude::{AgentHandle, AgentRuntime};
-use sqlx::PgPool;
 use std::sync::Arc;
+
+#[cfg(feature = "postgres")]
+use sqlx::PgPool;
+
+#[cfg(feature = "sqlite")]
+use sqlx::SqlitePool;
 
 #[cfg(feature = "redis")]
 use deadpool_redis::Pool as RedisPool;
@@ -82,10 +87,17 @@ pub struct ActonHtmxState {
     /// Clone this freely - `AgentHandle` is designed for concurrent access
     job_agent: AgentHandle,
 
-    /// Database connection pool
+    /// PostgreSQL database connection pool
     ///
     /// Shared across all requests for efficient connection management
-    database_pool: Option<Arc<PgPool>>,
+    #[cfg(feature = "postgres")]
+    pg_pool: Option<Arc<PgPool>>,
+
+    /// SQLite database connection pool
+    ///
+    /// Shared across all requests for efficient connection management
+    #[cfg(feature = "sqlite")]
+    sqlite_pool: Option<Arc<SqlitePool>>,
 
     /// Redis connection pool (optional)
     ///
@@ -138,7 +150,10 @@ impl ActonHtmxState {
             csrf_manager,
             oauth2_manager,
             job_agent,
-            database_pool: None,
+            #[cfg(feature = "postgres")]
+            pg_pool: None,
+            #[cfg(feature = "sqlite")]
+            sqlite_pool: None,
             #[cfg(feature = "redis")]
             redis_pool: None,
             templates,
@@ -184,7 +199,10 @@ impl ActonHtmxState {
             csrf_manager,
             oauth2_manager,
             job_agent,
-            database_pool: None,
+            #[cfg(feature = "postgres")]
+            pg_pool: None,
+            #[cfg(feature = "sqlite")]
+            sqlite_pool: None,
             #[cfg(feature = "redis")]
             redis_pool: None,
             templates,
@@ -317,11 +335,11 @@ impl ActonHtmxState {
         &self.job_agent
     }
 
-    /// Get the database connection pool
+    /// Get the PostgreSQL database connection pool
     ///
     /// # Panics
     ///
-    /// Panics if the database pool has not been initialized via `set_database_pool`.
+    /// Panics if the PostgreSQL pool has not been initialized via `set_pg_pool`.
     ///
     /// # Example
     ///
@@ -334,13 +352,38 @@ impl ActonHtmxState {
     /// }
     /// ```
     #[must_use]
+    #[cfg(feature = "postgres")]
     pub fn database_pool(&self) -> &PgPool {
-        self.database_pool
+        self.pg_pool
             .as_ref()
-            .expect("Database pool not initialized")
+            .expect("PostgreSQL pool not initialized")
     }
 
-    /// Set the database connection pool
+    /// Get the SQLite database connection pool
+    ///
+    /// # Panics
+    ///
+    /// Panics if the SQLite pool has not been initialized via `set_sqlite_pool`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// async fn handler(State(state): State<ActonHtmxState>) {
+    ///     let pool = state.database_pool();
+    ///     let users = sqlx::query_as("SELECT * FROM users")
+    ///         .fetch_all(pool)
+    ///         .await?;
+    /// }
+    /// ```
+    #[must_use]
+    #[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+    pub fn database_pool(&self) -> &SqlitePool {
+        self.sqlite_pool
+            .as_ref()
+            .expect("SQLite pool not initialized")
+    }
+
+    /// Set the PostgreSQL database connection pool
     ///
     /// # Example
     ///
@@ -348,8 +391,48 @@ impl ActonHtmxState {
     /// let pool = PgPool::connect(&database_url).await?;
     /// state.set_database_pool(pool);
     /// ```
+    #[cfg(feature = "postgres")]
     pub fn set_database_pool(&mut self, pool: PgPool) {
-        self.database_pool = Some(Arc::new(pool));
+        self.pg_pool = Some(Arc::new(pool));
+    }
+
+    /// Set the SQLite database connection pool
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let pool = SqlitePool::connect(&database_url).await?;
+    /// state.set_database_pool(pool);
+    /// ```
+    #[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+    pub fn set_database_pool(&mut self, pool: SqlitePool) {
+        self.sqlite_pool = Some(Arc::new(pool));
+    }
+
+    /// Get the SQLite pool directly (when both postgres and sqlite are enabled)
+    #[must_use]
+    #[cfg(feature = "sqlite")]
+    pub fn sqlite_pool(&self) -> Option<&SqlitePool> {
+        self.sqlite_pool.as_deref()
+    }
+
+    /// Set the SQLite pool directly (when both postgres and sqlite are enabled)
+    #[cfg(feature = "sqlite")]
+    pub fn set_sqlite_pool(&mut self, pool: SqlitePool) {
+        self.sqlite_pool = Some(Arc::new(pool));
+    }
+
+    /// Get the PostgreSQL pool directly (when both postgres and sqlite are enabled)
+    #[must_use]
+    #[cfg(feature = "postgres")]
+    pub fn pg_pool(&self) -> Option<&PgPool> {
+        self.pg_pool.as_deref()
+    }
+
+    /// Set the PostgreSQL pool directly (when both postgres and sqlite are enabled)
+    #[cfg(feature = "postgres")]
+    pub fn set_pg_pool(&mut self, pool: PgPool) {
+        self.pg_pool = Some(Arc::new(pool));
     }
 
     /// Get the Redis connection pool (if configured)

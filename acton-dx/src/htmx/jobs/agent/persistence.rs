@@ -1,14 +1,29 @@
 //! Redis persistence for jobs using act_on handlers.
 
+#[cfg(feature = "redis")]
 use super::queue::QueuedJob;
-use crate::htmx::jobs::{JobId, JobStatus};
+#[cfg(not(feature = "redis"))]
+#[allow(unused_imports)]
+use super::queue::QueuedJob;
+
+#[cfg(feature = "redis")]
+use crate::htmx::jobs::JobId;
+#[cfg(not(feature = "redis"))]
+#[allow(unused_imports)]
+use crate::htmx::jobs::JobId;
+
+#[cfg(feature = "redis")]
+use crate::htmx::jobs::JobStatus;
+#[cfg(feature = "redis")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "redis")]
 use tracing::{debug, error};
 
 #[cfg(feature = "redis")]
 use redis::AsyncCommands;
 
 /// Message to persist a job to Redis.
+#[cfg(feature = "redis")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistJob {
     /// The job to persist.
@@ -16,6 +31,7 @@ pub struct PersistJob {
 }
 
 /// Message to mark a job as completed in Redis.
+#[cfg(feature = "redis")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkJobCompleted {
     /// Job ID.
@@ -25,6 +41,7 @@ pub struct MarkJobCompleted {
 }
 
 /// Message to mark a job as failed in Redis.
+#[cfg(feature = "redis")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarkJobFailed {
     /// Job ID.
@@ -36,6 +53,7 @@ pub struct MarkJobFailed {
 }
 
 /// Message to move a job to the dead letter queue.
+#[cfg(feature = "redis")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveToDeadLetterQueue {
     /// Job ID.

@@ -9,6 +9,7 @@ use acton_dx::prelude::*;
 use acton_dx::agents::{CsrfManagerAgent, SessionManagerAgent};
 use acton_dx::middleware::{SecurityHeadersConfig, SecurityHeadersLayer, SessionLayer};
 use std::sync::Arc;
+use tracing_subscriber::prelude::*;
 
 mod handlers;
 mod models;
@@ -20,11 +21,16 @@ use handlers::{auth, home};
 pub struct AppState {
     db: Arc<sqlx::SqlitePool>,
     session_manager: acton_reactive::prelude::AgentHandle,
+    #[allow(dead_code)]
     csrf_manager: acton_reactive::prelude::AgentHandle,
 }
 
 impl AppState {
     /// Create new application state, spawning all agents
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if agent spawning fails.
     pub async fn new(
         runtime: &mut acton_reactive::prelude::AgentRuntime,
         db: sqlx::SqlitePool,

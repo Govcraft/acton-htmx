@@ -10,9 +10,12 @@ pub mod user;
 
 pub use extractors::{Authenticated, AuthenticationError, OptionalAuth};
 pub use handlers::{
-    login_form, login_post, logout_post, register_form, register_post, AuthHandlerError,
-    LoginForm, RegisterForm,
+    login_form, logout_post, register_form, AuthHandlerError, LoginForm, RegisterForm,
 };
+
+// Database-dependent handlers are only available with postgres or sqlite
+#[cfg(any(feature = "postgres", feature = "sqlite"))]
+pub use handlers::{login_post, register_post};
 pub use password::{
     hash_password, verify_password, PasswordError, PasswordHashConfig, PasswordHasher,
 };

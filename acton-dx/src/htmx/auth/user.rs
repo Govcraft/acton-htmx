@@ -426,6 +426,147 @@ impl User {
 
         Ok(user)
     }
+
+    // SQLite implementations
+
+    /// Create a new user with hashed password (SQLite)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if password hashing fails, database operation fails, or email already exists.
+    #[cfg(feature = "sqlite")]
+    pub async fn create(data: CreateUser, pool: &sqlx::SqlitePool) -> Result<Self, UserError> {
+        // Validate password strength
+        validate_password_strength(&data.password)?;
+
+        // Hash password
+        let password_hash = hash_password(&data.password)?;
+
+        // SQLite stores arrays as JSON
+        let roles_json = serde_json::to_string(&vec!["user"]).unwrap_or_default();
+        let permissions_json = serde_json::to_string(&Vec::<String>::new()).unwrap_or_default();
+
+        // Insert and get the ID
+        let result = sqlx::query(
+            r"INSERT INTO users (email, password_hash, roles, permissions, email_verified)
+              VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(data.email.as_str())
+        .bind(&password_hash)
+        .bind(&roles_json)
+        .bind(&permissions_json)
+        .bind(false)
+        .execute(pool)
+        .await?;
+
+        let id = result.last_insert_rowid();
+
+        // Fetch the created user
+        Self::find_by_id(id, pool).await
+    }
+
+    /// Find a user by email (SQLite)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if database operation fails or user not found.
+    #[cfg(feature = "sqlite")]
+    pub async fn find_by_email(
+        email: &EmailAddress,
+        pool: &sqlx::SqlitePool,
+    ) -> Result<Self, UserError> {
+        let row = sqlx::query_as::<_, SqliteUserRow>(
+            r"SELECT id, email, password_hash, roles, permissions, email_verified, created_at, updated_at
+              FROM users WHERE email = ?",
+        )
+        .bind(email.as_str())
+        .fetch_optional(pool)
+        .await?
+        .ok_or(UserError::NotFound)?;
+
+        row.into_user()
+    }
+
+    /// Find a user by ID (SQLite)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if database operation fails or user not found.
+    #[cfg(feature = "sqlite")]
+    pub async fn find_by_id(id: i64, pool: &sqlx::SqlitePool) -> Result<Self, UserError> {
+        let row = sqlx::query_as::<_, SqliteUserRow>(
+            r"SELECT id, email, password_hash, roles, permissions, email_verified, created_at, updated_at
+              FROM users WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or(UserError::NotFound)?;
+
+        row.into_user()
+    }
+
+    /// Authenticate a user with email and password (SQLite)
+    ///
+    /// # Errors
+    ///
+    /// Returns `UserError::InvalidCredentials` if email not found or password incorrect.
+    #[cfg(feature = "sqlite")]
+    pub async fn authenticate(
+        email: &EmailAddress,
+        password: &str,
+        pool: &sqlx::SqlitePool,
+    ) -> Result<Self, UserError> {
+        let user = Self::find_by_email(email, pool)
+            .await
+            .map_err(|_| UserError::InvalidCredentials)?;
+
+        let valid = user
+            .verify_password(password)
+            .map_err(|_| UserError::InvalidCredentials)?;
+
+        if !valid {
+            return Err(UserError::InvalidCredentials);
+        }
+
+        Ok(user)
+    }
+}
+
+/// Helper struct for SQLite queries (stores arrays as JSON strings)
+#[cfg(feature = "sqlite")]
+#[derive(sqlx::FromRow)]
+struct SqliteUserRow {
+    id: i64,
+    email: String,
+    password_hash: String,
+    roles: String,       // JSON array stored as text
+    permissions: String, // JSON array stored as text
+    email_verified: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[cfg(feature = "sqlite")]
+impl SqliteUserRow {
+    fn into_user(self) -> Result<User, UserError> {
+        let email = EmailAddress::parse(&self.email)?;
+        let roles: Vec<String> =
+            serde_json::from_str(&self.roles).unwrap_or_else(|_| vec!["user".to_string()]);
+        let permissions: Vec<String> =
+            serde_json::from_str(&self.permissions).unwrap_or_default();
+
+        Ok(User {
+            id: self.id,
+            email,
+            password_hash: self.password_hash,
+            roles,
+            permissions,
+            email_verified: self.email_verified,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        })
+    }
 }
 
 /// Data for creating a new user

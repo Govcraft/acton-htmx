@@ -103,14 +103,18 @@
 //! ```
 
 pub mod agent;
+#[cfg(feature = "postgres")]
 pub mod handlers;
 pub mod http;
+#[cfg(feature = "postgres")]
 pub mod models;
 pub mod providers;
 pub mod types;
 
 pub use agent::{OAuth2Agent, GenerateState, ValidateState, RemoveState, CleanupExpired};
+#[cfg(feature = "postgres")]
 pub use handlers::{initiate_oauth, handle_oauth_callback, unlink_oauth_account};
+#[cfg(feature = "postgres")]
 pub use models::OAuthAccount;
 pub use providers::{GitHubProvider, GoogleProvider, OidcProvider};
 pub use types::{

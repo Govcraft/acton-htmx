@@ -117,6 +117,7 @@ pub async fn login_form(
 ///
 /// let app = Router::new().route("/login", post(login_post));
 /// ```
+#[cfg(feature = "postgres")]
 pub async fn login_post(
     State(state): State<ActonHtmxState>,
     mut session: Session,
@@ -142,6 +143,29 @@ pub async fn login_post(
     session.add_flash(FlashMessage::success("Successfully logged in!"));
 
     // Redirect to dashboard/home
+    Ok(Redirect::to("/").into_response())
+}
+
+/// POST /login - Process login (SQLite)
+#[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+pub async fn login_post(
+    State(state): State<ActonHtmxState>,
+    mut session: Session,
+    Form(form): Form<LoginForm>,
+) -> Result<Response, AuthHandlerError> {
+    form.validate()
+        .map_err(|e| AuthHandlerError::ValidationFailed(e.to_string()))?;
+
+    let email = EmailAddress::parse(&form.email)
+        .map_err(|_| AuthHandlerError::InvalidCredentials)?;
+
+    let user = User::authenticate(&email, &form.password, state.database_pool())
+        .await
+        .map_err(|_| AuthHandlerError::InvalidCredentials)?;
+
+    session.set_user_id(Some(user.id));
+    session.add_flash(FlashMessage::success("Successfully logged in!"));
+
     Ok(Redirect::to("/").into_response())
 }
 
@@ -209,6 +233,7 @@ pub async fn register_form(
 ///
 /// let app = Router::new().route("/register", post(register_post));
 /// ```
+#[cfg(feature = "postgres")]
 pub async fn register_post(
     State(state): State<ActonHtmxState>,
     mut session: Session,
@@ -241,6 +266,35 @@ pub async fn register_post(
     session.add_flash(FlashMessage::success("Account created successfully! Welcome!"));
 
     // Redirect to dashboard/home
+    Ok(Redirect::to("/").into_response())
+}
+
+/// POST /register - Process registration (SQLite)
+#[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+pub async fn register_post(
+    State(state): State<ActonHtmxState>,
+    mut session: Session,
+    Form(form): Form<RegisterForm>,
+) -> Result<Response, AuthHandlerError> {
+    form.validate()
+        .map_err(|e| AuthHandlerError::ValidationFailed(e.to_string()))?;
+
+    let email = EmailAddress::parse(&form.email)
+        .map_err(|_| AuthHandlerError::InvalidEmail)?;
+
+    if form.password != form.password_confirm {
+        return Err(AuthHandlerError::PasswordMismatch);
+    }
+
+    let create_user = CreateUser {
+        email,
+        password: form.password,
+    };
+    let user = User::create(create_user, state.database_pool()).await?;
+
+    session.set_user_id(Some(user.id));
+    session.add_flash(FlashMessage::success("Account created successfully! Welcome!"));
+
     Ok(Redirect::to("/").into_response())
 }
 

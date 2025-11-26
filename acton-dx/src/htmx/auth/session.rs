@@ -271,6 +271,17 @@ impl FlashLevel {
     }
 }
 
+impl std::fmt::Display for FlashLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Success => write!(f, "success"),
+            Self::Info => write!(f, "info"),
+            Self::Warning => write!(f, "warning"),
+            Self::Error => write!(f, "error"),
+        }
+    }
+}
+
 /// Session-related errors
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {

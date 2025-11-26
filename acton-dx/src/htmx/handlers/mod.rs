@@ -2,12 +2,13 @@
 //!
 //! This module contains HTTP request handlers for various features:
 //! - Cedar policy administration (admin-only endpoints)
-//! - Role management (admin-only endpoints)
+//! - Role management (admin-only endpoints, requires postgres)
 //! - Job management (admin-only endpoints)
 
 #[cfg(feature = "cedar")]
 pub mod cedar_admin;
 pub mod job_admin;
+#[cfg(feature = "postgres")]
 pub mod role_admin;
 
 // Re-exports
@@ -18,6 +19,7 @@ pub use cedar_admin::{policy_status, reload_policies, PolicyStatusResponse, Relo
 #[allow(unused_imports)]
 pub use job_admin::{job_stats, list_jobs, JobListResponse, JobStatsResponse};
 
+#[cfg(feature = "postgres")]
 #[allow(unused_imports)]
 pub use role_admin::{
     assign_role, get_user_roles, remove_role, AssignRoleRequest, RoleResponse,
