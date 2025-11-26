@@ -1,13 +1,13 @@
-//! {{project_name}} - Built with acton-htmx
+//! {{project_name}} - Built with Acton HTMX
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
 #![warn(clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use acton_htmx::prelude::*;
-use acton_htmx::agents::{CsrfManagerAgent, SessionManagerAgent};
-use acton_htmx::middleware::{SecurityHeadersConfig, SecurityHeadersLayer, SessionLayer};
+use acton::prelude::*;
+use acton::agents::{CsrfManagerAgent, SessionManagerAgent};
+use acton::middleware::{SecurityHeadersConfig, SecurityHeadersLayer, SessionLayer};
 use std::sync::Arc;
 
 mod handlers;

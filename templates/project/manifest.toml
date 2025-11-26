@@ -1,9 +1,9 @@
 # Project Template Manifest
-# Defines all templates for generating new acton-htmx projects
+# Defines all templates for generating new Acton HTMX projects
 
 [meta]
 version = "1.0.0"
-description = "acton-htmx project scaffolding templates"
+description = "Acton HTMX project scaffolding templates"
 
 # Common templates shared between SQLite and PostgreSQL
 [common]

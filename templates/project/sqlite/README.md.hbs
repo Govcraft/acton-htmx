@@ -1,19 +1,19 @@
 # {{project_name}}
 
-A web application built with [acton-htmx](https://github.com/govcraft/acton-htmx), an opinionated Rust framework for server-rendered HTMX applications.
+A web application built with [Acton HTMX](https://github.com/govcraft/acton-htmx), an opinionated Rust framework for server-rendered HTMX applications.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Rust 1.75 or later
-- acton-htmx CLI: `cargo install acton-htmx-cli`
+- Acton CLI: `cargo install acton`
 
 ### Setup
 
 ```bash
 # Start development server (database created automatically!)
-acton-htmx dev
+acton htmx dev
 ```
 
 Open http://localhost:3000
@@ -58,13 +58,13 @@ cargo test
 
 ```bash
 # Run migrations (automatic on startup)
-acton-htmx db migrate
+acton htmx db migrate
 
 # Reset database
-acton-htmx db reset
+acton htmx db reset
 
 # Create new migration
-acton-htmx db create <name>
+acton htmx db create <name>
 ```
 
 ### Building for Production
@@ -78,7 +78,7 @@ cargo build --release
 For production, you may want to use PostgreSQL. Recreate the project with:
 
 ```bash
-acton-htmx new {{project_name}} --database postgres
+acton htmx new {{project_name}} --database postgres
 ```
 
 Or modify `config/production.toml` and `Cargo.toml` manually.

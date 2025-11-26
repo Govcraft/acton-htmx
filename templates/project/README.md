@@ -1,6 +1,6 @@
-# acton-htmx Project Templates
+# Acton HTMX Project Templates
 
-This directory contains templates for generating new acton-htmx projects with the `acton-htmx new` command.
+This directory contains templates for generating new Acton HTMX projects with the `acton htmx new` command.
 
 ## Structure
 
@@ -23,7 +23,7 @@ project/
 
 ## Template Variables
 
-Templates use Handlebars syntax with the following variables:
+Templates use MiniJinja syntax with the following variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
@@ -48,6 +48,6 @@ Users can customize templates by:
 
 - Use `.hbs` extension for all template files
 - Include clear comments explaining purpose
-- Follow acton-htmx code style guidelines
+- Follow Acton HTMX code style guidelines
 - Keep templates minimal and focused
 - Test generated code compiles without warnings

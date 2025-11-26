@@ -1,6 +1,6 @@
 //! Home page handler
 
-use acton_htmx::prelude::*;
+use acton::prelude::*;
 use askama::Template;
 use axum::response::Html;
 
@@ -8,7 +8,7 @@ use axum::response::Html;
 #[template(path = "home.html")]
 pub struct HomeTemplate {
     pub user_id: Option<i64>,
-    pub flash_messages: Vec<acton_htmx::auth::FlashMessage>,
+    pub flash_messages: Vec<acton::auth::FlashMessage>,
 }
 
 /// GET / - Home page

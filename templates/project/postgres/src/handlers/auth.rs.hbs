@@ -7,8 +7,8 @@
 //! - Form validation
 
 use crate::AppState;
-use acton_htmx::prelude::*;
-use acton_htmx::auth::{FlashLevel, FlashMessage, hash_password, verify_password};
+use acton::prelude::*;
+use acton::auth::{FlashLevel, FlashMessage, hash_password, verify_password};
 use askama::Template;
 use axum::{
     extract::State,
