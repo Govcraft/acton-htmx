@@ -173,10 +173,10 @@ fn init_templates() -> Result<()> {
 
     println!();
     println!("To customize a template:");
-    println!("  {} {}", style("acton-htmx templates edit").cyan(), style("<template-name>").yellow());
+    println!("  {} {}", style("acton htmx templates edit").cyan(), style("<template-name>").yellow());
     println!();
     println!("Example:");
-    println!("  {} {}", style("acton-htmx templates edit").cyan(), style("errors/403.html").yellow());
+    println!("  {} {}", style("acton htmx templates edit").cyan(), style("errors/403.html").yellow());
 
     Ok(())
 }
@@ -310,7 +310,7 @@ fn show_single_diff(name: &str, config_dir: &std::path::Path, cache_dir: &std::p
 
     if default_content.is_empty() {
         println!("Cannot show diff: default template not available");
-        println!("Run 'acton-htmx templates init' to download defaults");
+        println!("Run 'acton htmx templates init' to download defaults");
         return Ok(());
     }
 
@@ -396,7 +396,7 @@ fn reset_templates(template: Option<&str>, all: bool) -> Result<()> {
         // Ensure we have the default to restore
         let default_path = cache_dir.join(name);
         if !default_path.exists() {
-            println!("Default template not cached. Run 'acton-htmx templates init' first.");
+            println!("Default template not cached. Run 'acton htmx templates init' first.");
             return Ok(());
         }
 

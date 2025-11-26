@@ -1,4 +1,4 @@
-//! CRUD scaffold generator for acton-htmx
+//! CRUD scaffold generator for Acton HTMX
 //!
 //! This module provides intelligent code generation for complete CRUD resources.
 //! It generates:
@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```bash
-//! acton-htmx scaffold crud Post \
+//! acton htmx scaffold crud Post \
 //!   title:string \
 //!   content:text \
 //!   author:references:User \
@@ -117,7 +117,7 @@ impl ScaffoldCommand {
         println!("     {}", style(format!("src/models/mod.rs: pub mod {model_snake};")).yellow());
         println!("     {}", style(format!("src/forms/mod.rs: pub mod {model_snake};")).yellow());
         println!("     {}", style(format!("src/handlers/mod.rs: pub mod {plural};")).yellow());
-        println!("  2. Run the migration: {}", style("acton-htmx db migrate").yellow());
+        println!("  2. Run the migration: {}", style("acton htmx db migrate").yellow());
         println!("  3. Add routes to your router:");
         println!("     {}", style(format!(".route(\"{route_path}\", get(handlers::{plural}::list).post(handlers::{plural}::create))", route_path = TemplateHelpers::to_route_path(&self.model))).yellow());
         println!("     {}", style(format!(".route(\"{route_path}/new\", get(handlers::{plural}::new))", route_path = TemplateHelpers::to_route_path(&self.model))).yellow());

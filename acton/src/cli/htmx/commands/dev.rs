@@ -31,7 +31,7 @@ impl DevCommand {
         // Verify Cargo.toml exists in the target directory
         if !project_dir.join("Cargo.toml").exists() {
             anyhow::bail!(
-                "No Cargo.toml found in {}. Is this an acton-htmx project?",
+                "No Cargo.toml found in {}. Is this an Acton HTMX project?",
                 project_dir.display()
             );
         }

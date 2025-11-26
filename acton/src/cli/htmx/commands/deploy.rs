@@ -16,9 +16,9 @@ pub enum DeployCommand {
     /// Build and push Docker image to registry
     ///
     /// Examples:
-    ///   acton-htmx deploy docker
-    ///   acton-htmx deploy docker --registry=ghcr.io/myorg
-    ///   acton-htmx deploy docker --tag=v1.0.0
+    ///   acton htmx deploy docker
+    ///   acton htmx deploy docker --registry=ghcr.io/myorg
+    ///   acton htmx deploy docker --tag=v1.0.0
     Docker {
         /// Docker registry to push to (e.g., ghcr.io/myorg, docker.io/username)
         #[arg(long)]
@@ -76,7 +76,7 @@ impl DeployCommand {
         // Check if Dockerfile exists
         if !dockerfile.exists() {
             anyhow::bail!(
-                "Dockerfile not found at: {}. Run `acton-htmx generate deployment docker` first.",
+                "Dockerfile not found at: {}. Run `acton htmx generate deployment docker` first.",
                 dockerfile.display()
             );
         }
@@ -128,7 +128,7 @@ impl DeployCommand {
             println!("  {} Skipping push (no registry specified)", style("ℹ").blue());
             println!();
             println!("  To push to a registry, use:");
-            println!("    acton-htmx deploy docker --registry=ghcr.io/myorg");
+            println!("    acton htmx deploy docker --registry=ghcr.io/myorg");
         } else {
             println!("  {ROCKET} Pushing to registry...");
 
@@ -156,7 +156,7 @@ impl DeployCommand {
         println!();
         println!("Next steps:");
         println!("  1. Deploy the image to your infrastructure");
-        println!("  2. Run migrations: docker exec <container> acton-htmx db migrate");
+        println!("  2. Run migrations: docker exec <container> acton htmx db migrate");
         println!("  3. Monitor logs and health checks");
         println!();
         println!("Image: {}", style(&image_name).cyan());

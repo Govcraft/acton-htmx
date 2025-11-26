@@ -183,7 +183,7 @@ impl JobsCommand {
             Err(e) => {
                 println!("  {} Failed to connect to API: {}", style("Error:").red(), e);
                 println!();
-                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+                println!("{INFO} Make sure your Acton HTMX application is running at {}", style(base_url).cyan());
                 println!("{INFO} You can set a custom URL with: ACTON_HTMX_API_URL=http://your-api:3000");
                 return;
             }
@@ -256,7 +256,7 @@ impl JobsCommand {
             Err(e) => {
                 println!("  {} Failed to connect to API: {}", style("Error:").red(), e);
                 println!();
-                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+                println!("{INFO} Make sure your Acton HTMX application is running at {}", style(base_url).cyan());
                 println!("{INFO} You can set a custom URL with: ACTON_HTMX_API_URL=http://your-api:3000");
                 return;
             }
@@ -312,7 +312,7 @@ impl JobsCommand {
             Err(e) => {
                 println!("  {} Failed to retry job: {}", style("Error:").red(), e);
                 println!();
-                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+                println!("{INFO} Make sure your Acton HTMX application is running at {}", style(base_url).cyan());
             }
         }
     }
@@ -353,7 +353,7 @@ impl JobsCommand {
             Err(e) => {
                 println!("  {} Failed to retry jobs: {}", style("Error:").red(), e);
                 println!();
-                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+                println!("{INFO} Make sure your Acton HTMX application is running at {}", style(base_url).cyan());
             }
         }
 
@@ -382,7 +382,7 @@ impl JobsCommand {
             Err(e) => {
                 println!("  {} Failed to cancel job: {}", style("Error:").red(), e);
                 println!();
-                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+                println!("{INFO} Make sure your Acton HTMX application is running at {}", style(base_url).cyan());
             }
         }
     }
@@ -426,7 +426,7 @@ impl JobsCommand {
             Err(e) => {
                 println!("  {} Failed to clear queue: {}", style("Error:").red(), e);
                 println!();
-                println!("{INFO} Make sure your acton-htmx application is running at {}", style(base_url).cyan());
+                println!("{INFO} Make sure your Acton HTMX application is running at {}", style(base_url).cyan());
             }
         }
 

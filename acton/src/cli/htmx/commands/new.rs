@@ -60,7 +60,7 @@ impl NewCommand {
         println!(
             "{} {} {} {} {}",
             style("Creating").green().bold(),
-            style("acton-htmx project:").bold(),
+            style("Acton HTMX project:").bold(),
             style(&self.name).cyan().bold(),
             style("with").dim(),
             style(db_name).yellow().bold()
@@ -158,7 +158,7 @@ impl NewCommand {
                 println!("     {} {}", style("$").dim(), style(format!("cd {}", self.name)).cyan());
                 println!();
                 println!("  {} Start development server:", style("2.").cyan());
-                println!("     {} {}", style("$").dim(), style("acton-htmx dev").cyan());
+                println!("     {} {}", style("$").dim(), style("acton htmx dev").cyan());
                 println!();
                 println!("     {} Database is created automatically on first run!", style("✓").green());
                 println!();
@@ -173,10 +173,10 @@ impl NewCommand {
                 println!("  {} Set up database:", style("2.").cyan());
                 let db_name = self.name.replace('-', "_");
                 println!("     {} {}", style("$").dim(), style(format!("createdb {db_name}_dev")).cyan());
-                println!("     {} {}", style("$").dim(), style("acton-htmx db migrate").cyan());
+                println!("     {} {}", style("$").dim(), style("acton htmx db migrate").cyan());
                 println!();
                 println!("  {} Start development server:", style("3.").cyan());
-                println!("     {} {}", style("$").dim(), style("acton-htmx dev").cyan());
+                println!("     {} {}", style("$").dim(), style("acton htmx dev").cyan());
                 println!();
                 println!("  {} Open in browser:", style("4.").cyan());
                 println!("     {}", style("http://localhost:3000").cyan().underlined());
@@ -186,7 +186,7 @@ impl NewCommand {
         println!();
         println!(
             "{}",
-            style("Happy building with acton-htmx! 🚀").green().bold()
+            style("Happy building with Acton HTMX! 🚀").green().bold()
         );
     }
 }

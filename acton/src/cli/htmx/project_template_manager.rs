@@ -1,4 +1,4 @@
-//! Project template manager for `acton-htmx new` command
+//! Project template manager for `acton htmx new` command
 //!
 //! Manages downloading and caching project templates from GitHub with XDG compliance.
 //! Templates can be customized by users by placing modified versions in the XDG config directory.
@@ -288,7 +288,7 @@ impl ProjectTemplateManager {
             return Ok(cache_path);
         }
 
-        anyhow::bail!("Template not found: {name}. Run `acton-htmx templates update` to download.")
+        anyhow::bail!("Template not found: {name}. Run `acton htmx templates update` to download.")
     }
 
     /// Generate a new project from templates

@@ -22,9 +22,9 @@ pub enum GenerateCommand {
     /// Generate a new background job
     ///
     /// Examples:
-    ///   acton-htmx generate job `WelcomeEmail` `user_id:i64` `email:string`
-    ///   acton-htmx generate job `GenerateReport` `report_id:i64` --priority=high
-    ///   acton-htmx generate job `CleanupOldData` `days:u32` --timeout=600
+    ///   acton htmx generate job `WelcomeEmail` `user_id:i64` `email:string`
+    ///   acton htmx generate job `GenerateReport` `report_id:i64` --priority=high
+    ///   acton htmx generate job `CleanupOldData` `days:u32` --timeout=600
     Job {
         /// Job name (`PascalCase`, will be suffixed with `Job`)
         name: String,
@@ -55,8 +55,8 @@ pub enum GenerateCommand {
     /// Generate production deployment files
     ///
     /// Examples:
-    ///   acton-htmx generate deployment docker
-    ///   acton-htmx generate deployment docker --output=./deploy
+    ///   acton htmx generate deployment docker
+    ///   acton htmx generate deployment docker --output=./deploy
     Deployment {
         /// Deployment type (only `docker` supported currently)
         #[arg(value_name = "TYPE", default_value = "docker")]

@@ -571,7 +571,7 @@ pub fn {}_oauth_routes() -> Router<ActonHtmxState> {{
         }
 
         println!("\n  3. Run database migration:");
-        println!("     $ acton-htmx db migrate");
+        println!("     $ acton htmx db migrate");
 
         println!("\n  4. Add OAuth2 routes to your main.rs:");
         println!("     → See example in docs/examples/{provider}_oauth_routes.rs");
