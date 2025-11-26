@@ -1,7 +1,6 @@
 [workspace]
 members = [
-    "acton-htmx",
-    "acton-htmx-cli",
+    "acton",
 ]
 resolver = "2"
 
@@ -22,13 +21,13 @@ doc_markdown = "allow"
 module_name_repetitions = "allow"
 
 [workspace.package]
-version = "1.0.0-beta.7"
+version = "1.0.0-beta.8"
 edition = "2021"
 rust-version = "1.83.0"
 authors = ["Acton Contributors"]
 license = "MIT"
-repository = "https://github.com/GovCraft/acton-htmx"
-homepage = "https://acton-htmx.dev"
+repository = "https://github.com/GovCraft/acton"
+homepage = "https://acton.dev"
 keywords = ["web", "framework", "htmx", "axum", "hypermedia"]
 categories = ["web-programming::http-server"]
 
@@ -46,7 +45,6 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 opentelemetry = "0.31"
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
 tower-resilience = "0.3"
-jsonwebtoken = "10"
 governor = "0.10.2"
 
 # From acton-reactive - Actor runtime
@@ -78,7 +76,6 @@ async-trait = "0.1"
 
 # HTTP
 http = "1"
-http-body-util = "0.1"
 hyper = "1"
 
 # Time
@@ -91,11 +88,6 @@ parking_lot = "0.12"
 
 # Testing
 proptest = "1"
-
-# Procedural macros
-syn = { version = "2", features = ["full"] }
-quote = "1"
-proc-macro2 = "1"
 
 # CLI
 clap = { version = "4", features = ["derive", "cargo"] }

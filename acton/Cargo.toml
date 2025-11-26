@@ -1,0 +1,189 @@
+[package]
+name = "acton"
+version = "1.0.0-beta.8"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository = "https://github.com/GovCraft/acton"
+homepage = "https://acton.dev"
+keywords = ["web", "framework", "htmx", "axum", "hypermedia"]
+categories = ["web-programming::http-server", "command-line-utilities"]
+description = "Unified Acton framework CLI - build web applications in Rust"
+readme = "../README.md"
+
+[lints]
+workspace = true
+
+[lib]
+name = "acton"
+path = "src/lib.rs"
+
+[[bin]]
+name = "acton"
+path = "src/bin/main.rs"
+required-features = ["cli"]
+
+[dependencies]
+# Core web framework (htmx feature)
+axum = { workspace = true, features = ["multipart"], optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+redis = { workspace = true, optional = true }
+deadpool-redis = { workspace = true, optional = true }
+figment = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+tower-resilience = { workspace = true, optional = true }
+governor = { workspace = true, optional = true }
+acton-reactive = { workspace = true, optional = true }
+tokio = { workspace = true }
+axum-htmx = { workspace = true, optional = true }
+askama = { workspace = true, optional = true }
+validator = { workspace = true, features = ["derive"], optional = true }
+argon2 = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true }
+chrono = { workspace = true }
+once_cell = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
+
+# HTMX crate-specific (htmx feature)
+base64 = { version = "0.22.1", optional = true }
+cron = { version = "0.15.0", optional = true }
+multer = { version = "3.1.0", features = ["tokio-io"], optional = true }
+bytes = { version = "1.11.0", optional = true }
+mime = { version = "0.3.17", optional = true }
+futures-util = { version = "0.3.31", optional = true }
+infer = { version = "0.19.0", features = ["alloc"], optional = true }
+image = { version = "0.25.6", features = ["jpeg", "png", "gif", "webp"], optional = true }
+kamadak-exif = { version = "0.6.1", optional = true }
+httpdate = { version = "1.0.3", optional = true }
+lettre = { version = "0.11.19", features = ["smtp-transport", "builder", "tokio1-native-tls"], optional = true }
+aws-sdk-sesv2 = { version = "1.82.0", optional = true }
+aws-config = { version = "1.8.11", optional = true }
+oauth2 = { version = "5.0.0", optional = true }
+openidconnect = { version = "4.0.1", optional = true }
+hex = { version = "0.4.3", optional = true }
+time = { workspace = true, features = ["macros"], optional = true }
+reqwest = { version = "0.12.24", features = ["json"], optional = true }
+cedar-policy = { version = "4.3", optional = true }
+regex = { version = "1.12.2", optional = true }
+dirs = { version = "6.0.0", optional = true }
+clamav-client = { version = "2.2.0", features = ["tokio"], optional = true }
+mime_guess = { version = "2.0.5", optional = true }
+minijinja = { version = "2", features = ["loader"], optional = true }
+notify = { version = "7", optional = true }
+phf = { version = "0.11", features = ["macros"], optional = true }
+
+# CLI dependencies (cli feature)
+clap = { workspace = true, optional = true }
+console = { workspace = true, optional = true }
+indicatif = { workspace = true, optional = true }
+dialoguer = { workspace = true, optional = true }
+walkdir = { version = "2", optional = true }
+Inflector = { version = "0.11.4", features = ["heavyweight"], optional = true }
+ureq = { version = "3.1.4", optional = true }
+convert_case = { version = "0.9.0", optional = true }
+similar = { version = "2", optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+anyhow.workspace = true
+tempfile = "3.23.0"
+axum-test = "18.3"
+mockall = "0.13"
+
+[features]
+default = ["htmx", "cli", "postgres", "redis", "cedar"]
+
+# HTMX web framework
+htmx = [
+    "dep:axum",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:sqlx",
+    "dep:figment",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:tower-resilience",
+    "dep:governor",
+    "dep:acton-reactive",
+    "dep:axum-htmx",
+    "dep:askama",
+    "dep:validator",
+    "dep:argon2",
+    "dep:rand",
+    "dep:sha2",
+    "dep:uuid",
+    "dep:toml",
+    "dep:thiserror",
+    "dep:async-trait",
+    "dep:http",
+    "dep:hyper",
+    "dep:once_cell",
+    "dep:parking_lot",
+    "dep:base64",
+    "dep:cron",
+    "dep:multer",
+    "dep:bytes",
+    "dep:mime",
+    "dep:futures-util",
+    "dep:infer",
+    "dep:image",
+    "dep:kamadak-exif",
+    "dep:httpdate",
+    "dep:lettre",
+    "dep:oauth2",
+    "dep:openidconnect",
+    "dep:hex",
+    "dep:time",
+    "dep:reqwest",
+    "dep:regex",
+    "dep:dirs",
+    "dep:mime_guess",
+    "dep:minijinja",
+    "dep:notify",
+    "dep:phf",
+]
+
+# CLI tool
+cli = [
+    "dep:clap",
+    "dep:console",
+    "dep:indicatif",
+    "dep:dialoguer",
+    "dep:walkdir",
+    "dep:Inflector",
+    "dep:ureq",
+    "dep:convert_case",
+    "dep:similar",
+    "dep:minijinja",
+    "dep:dirs",
+
+]
+
+# Database backends (require htmx)
+postgres = ["htmx", "sqlx/postgres"]
+sqlite = ["htmx", "sqlx/sqlite"]
+mysql = ["htmx", "sqlx/mysql"]
+
+# Optional htmx features
+redis = ["htmx", "dep:redis", "dep:deadpool-redis"]
+cedar = ["htmx", "dep:cedar-policy"]
+otel-metrics = ["htmx", "dep:opentelemetry", "dep:opentelemetry-otlp"]
+aws-ses = ["htmx", "dep:aws-sdk-sesv2", "dep:aws-config"]
+clamav = ["htmx", "dep:clamav-client"]
