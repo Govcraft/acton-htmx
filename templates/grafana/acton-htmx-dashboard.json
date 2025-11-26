@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "acton-htmx Application Metrics",
-    "tags": ["acton-htmx", "application"],
+    "title": "Acton DX Application Metrics",
+    "tags": ["acton-dx", "application"],
     "timezone": "browser",
     "schemaVersion": 16,
     "version": 1,

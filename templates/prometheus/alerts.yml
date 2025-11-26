@@ -4,7 +4,7 @@ groups:
     rules:
       # Application availability
       - alert: ApplicationDown
-        expr: up{job="acton-htmx"} == 0
+        expr: up{job="acton-dx"} == 0
         for: 1m
         labels:
           severity: critical

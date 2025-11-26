@@ -1,19 +1,19 @@
-# Acton-HTMX Scaffold Templates
+# Acton DX Scaffold Templates
 
-This directory contains Handlebars templates used by the `acton-htmx` CLI to generate CRUD scaffolds.
+This directory contains Handlebars templates used by the `acton-dx` CLI to generate CRUD scaffolds.
 
 ## Template Location
 
 Templates are stored in this repository and downloaded to your local machine on first use:
-- **Repository**: `https://github.com/Govcraft/acton-htmx/tree/main/templates/scaffold`
-- **Local Cache**: `$XDG_CONFIG_HOME/acton-htmx/templates/scaffold/` (typically `~/.config/acton-htmx/templates/scaffold/`)
+- **Repository**: `https://github.com/Govcraft/acton-dx/tree/main/templates/scaffold`
+- **Local Cache**: `$XDG_CONFIG_HOME/acton-dx/templates/scaffold/` (typically `~/.config/acton-dx/templates/scaffold/`)
 
 ## Customization
 
 You can customize these templates by:
-1. Locating your local template cache: `~/.config/acton-htmx/templates/scaffold/`
+1. Locating your local template cache: `~/.config/acton-dx/templates/scaffold/`
 2. Editing the `.hbs` files to match your preferences
-3. Running `acton-htmx scaffold crud` - it will use your customized templates
+3. Running `acton-dx htmx scaffold crud` - it will use your customized templates
 
 ## Template Files
 
@@ -75,7 +75,7 @@ Templates have access to the following variables:
 
 When you run:
 ```bash
-acton-htmx scaffold crud Post title:string content:text published:boolean
+acton-dx htmx scaffold crud Post title:string content:text published:boolean
 ```
 
 The CLI:
@@ -89,9 +89,9 @@ The CLI:
 To improve these templates:
 1. Fork this repository
 2. Edit templates in `templates/scaffold/`
-3. Test with `acton-htmx scaffold crud`
+3. Test with `acton-dx htmx scaffold crud`
 4. Submit a pull request
 
 ## License
 
-MIT License - Same as acton-htmx
+MIT License - Same as acton-dx

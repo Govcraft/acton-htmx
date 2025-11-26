@@ -1,6 +1,6 @@
-# Acton HTMX Project Templates
+# Acton DX Project Templates
 
-This directory contains templates for generating new Acton HTMX projects with the `acton htmx new` command.
+This directory contains templates for generating new Acton DX projects with the `acton-dx htmx new` command.
 
 ## Structure
 
@@ -34,7 +34,7 @@ Templates use MiniJinja syntax with the following variables:
 
 Users can customize templates by:
 
-1. Copy templates to `$XDG_CONFIG_HOME/acton-htmx/templates/project/`
+1. Copy templates to `$XDG_CONFIG_HOME/acton-dx/templates/project/`
 2. Edit the copied templates
 3. The CLI will use customized templates from XDG config directory first
 
@@ -48,6 +48,6 @@ Users can customize templates by:
 
 - Use `.hbs` extension for all template files
 - Include clear comments explaining purpose
-- Follow Acton HTMX code style guidelines
+- Follow Acton DX code style guidelines
 - Keep templates minimal and focused
 - Test generated code compiles without warnings
